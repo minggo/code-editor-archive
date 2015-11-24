@@ -1,5 +1,7 @@
 helper = require('./helper.js');
 
+var EsprimaJavaScriptContentAssistProvider = require('./esprima/esprimaJsContentAssist.js').EsprimaJavaScriptContentAssistProvider;
+var esprima = new EsprimaJavaScriptContentAssistProvider();
 
 // when user input '.', will catch it to show help information
 editor.on('change', function(e) {
@@ -18,8 +20,7 @@ var myCompleter = {
     for (var i in proposals) {
       var proposal = proposals[i];
       completions.push({
-        value: proposal.proposal,
-        meta: proposal.description,
+        value: prefix + proposal.proposal,
       });
     }
 
@@ -29,11 +30,8 @@ var myCompleter = {
 
 // use esprima to parse the file and return completions
 function computeCompletions(editor, session, pos, prefix) {
-  var EsprimaJavaScriptContentAssistProvider = require('./esprima/esprimaJsContentAssist.js');
-  var esprima = new EsprimaJavaScriptContentAssistProvider();
   var offset = session.getDocument().positionToIndex(pos);
   var proposals = esprima.computeCompletions(session.getValue(), offset, prefix);
-  console.log(proposals);
   return proposals;
 }
 

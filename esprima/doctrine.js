@@ -27,7 +27,7 @@
 /*global doctrine:true, exports:true, parseTypeExpression:true, parseTop:true*/
 
 // (function (exports) {
-    'use strict';
+'use strict';
 
 var VERSION,
     Regex,
@@ -37,7 +37,7 @@ var VERSION,
     isArray;
 
 // Sync with package.json.
-VERSION = '0.0.4';
+VERSION = '0.0.4-dev';
 
 // See also tools/generate-unicode-regex.py.
 Regex = {
@@ -865,13 +865,21 @@ function unwrapComment(doc) {
     //
     // Identifier is "new" or "this"
     function parseParametersType() {
-        var params = [], normal = true, expr, rest = false;
+        var params = [], normal = true, expr;
 
         while (token !== Token.RPAREN) {
             if (token === Token.REST) {
                 // RestParameterType
                 consume(Token.REST);
-                rest = true;
+                expr = null;
+                if (token !== Token.RPAREN) {
+                    expr = parseNameExpression();
+                }
+                params.push({
+                    type: Syntax.RestType,
+                    expression: expr
+                });
+                break;
             }
 
             expr = parseTypeExpression();
@@ -896,12 +904,6 @@ function unwrapComment(doc) {
                     throw 'unexpected token';
                 }
             }
-            if (rest) {
-                expr = {
-                    type: Syntax.RestType,
-                    expression: expr
-                };
-            }
             params.push(expr);
             if (token !== Token.RPAREN) {
                 expect(Token.COMMA);
@@ -918,7 +920,7 @@ function unwrapComment(doc) {
     //   | TypeParameters '(' 'this' ':' TypeName ')' ResultType
     //   | TypeParameters '(' 'this' ':' TypeName ',' ParametersType ')' ResultType
     function parseFunctionType() {
-        var isNew, thisBinding, params, result, fnType, name;
+        var isNew, thisBinding, params, result;
         assert(token === Token.NAME && value === 'function', 'FunctionType should start with \'function\'');
         consume(Token.NAME);
 
@@ -929,6 +931,7 @@ function unwrapComment(doc) {
         isNew = false;
         params = [];
         thisBinding = null;
+
         if (token !== Token.RPAREN) {
             // ParametersType or 'this'
             if (token === Token.NAME &&
@@ -955,19 +958,13 @@ function unwrapComment(doc) {
             result = parseResultType();
         }
 
-        fnType = {
+        return {
             type: Syntax.FunctionType,
             params: params,
-            result: result
+            result: result,
+            'this': thisBinding,
+            'new': isNew
         };
-        if (thisBinding) {
-            // avoid adding null 'new' and 'this' properties
-            fnType['this'] = thisBinding;
-            if (isNew) {
-                fnType['new'] = true;
-            }
-        }
-        return fnType;
     }
 
     // BasicTypeExpression :=
@@ -1192,174 +1189,8 @@ function unwrapComment(doc) {
         return expr;
     }
 
-    function stringifyImpl(node, compact, topLevel) {
-        var result, i, iz;
-
-        switch (node.type) {
-        case Syntax.NullableLiteral:
-            result = '?';
-            break;
-
-        case Syntax.AllLiteral:
-            result = '*';
-            break;
-
-        case Syntax.NullLiteral:
-            result = 'null';
-            break;
-
-        case Syntax.UndefinedLiteral:
-            result = 'undefined';
-            break;
-
-        case Syntax.VoidLiteral:
-            result = 'void';
-            break;
-
-        case Syntax.UnionType:
-            if (!topLevel) {
-                result = '(';
-            } else {
-                result = '';
-            }
-
-            for (i = 0, iz = node.elements.length; i < iz; ++i) {
-                result += stringifyImpl(node.elements[i], compact);
-                if ((i + 1) !== iz) {
-                    result += '|';
-                }
-            }
-
-            if (!topLevel) {
-                result += ')';
-            }
-            break;
-
-        case Syntax.ArrayType:
-            result = '[';
-            for (i = 0, iz = node.elements.length; i < iz; ++i) {
-                result += stringifyImpl(node.elements[i], compact);
-                if ((i + 1) !== iz) {
-                    result += compact ? ',' : ', ';
-                }
-            }
-            result += ']';
-            break;
-
-        case Syntax.RecordType:
-            result = '{';
-            for (i = 0, iz = node.fields.length; i < iz; ++i) {
-                result += stringifyImpl(node.fields[i], compact);
-                if ((i + 1) !== iz) {
-                    result += compact ? ',' : ', ';
-                }
-            }
-            result += '}';
-            break;
-
-        case Syntax.FieldType:
-            if (node.value) {
-                result = node.key + (compact ? ':' : ': ') + stringifyImpl(node.value, compact);
-            } else {
-                result = node.key;
-            }
-            break;
-
-        case Syntax.FunctionType:
-            result = compact ? 'function(' : 'function (';
-
-            if (node['this']) {
-                if (node['new']) {
-                    result += (compact ? 'new:' : 'new: ');
-                } else {
-                    result += (compact ? 'this:' : 'this: ');
-                }
-
-                result += stringifyImpl(node['this'], compact);
-
-                if (node.params.length !== 0) {
-                    result += compact ? ',' : ', ';
-                }
-            }
-
-            for (i = 0, iz = node.params.length; i < iz; ++i) {
-                result += stringifyImpl(node.params[i], compact);
-                if ((i + 1) !== iz) {
-                    result += compact ? ',' : ', ';
-                }
-            }
-
-            result += ')';
-
-            if (node.result) {
-                result += (compact ? ':' : ': ') + stringifyImpl(node.result, compact);
-            }
-            break;
-
-        case Syntax.ParameterType:
-            result = node.name + (compact ? ':' : ': ') + stringifyImpl(node.expression, compact);
-            break;
-
-        case Syntax.RestType:
-            result = '...';
-            if (node.expression) {
-                result += stringifyImpl(node.expression, compact);
-            }
-            break;
-
-        case Syntax.NonNullableType:
-            if (node.prefix) {
-                result = '!' + stringifyImpl(node.expression, compact);
-            } else {
-                result = stringifyImpl(node.expression, compact) + '!';
-            }
-            break;
-
-        case Syntax.OptionalType:
-            result = stringifyImpl(node.expression, compact) + '=';
-            break;
-
-        case Syntax.NullableType:
-            if (node.prefix) {
-                result = '?' + stringifyImpl(node.expression, compact);
-            } else {
-                result = stringifyImpl(node.expression, compact) + '?';
-            }
-            break;
-
-        case Syntax.NameExpression:
-            result = node.name;
-            break;
-
-        case Syntax.TypeApplication:
-            result = stringifyImpl(node.expression, compact) + '.<';
-            for (i = 0, iz = node.applications.length; i < iz; ++i) {
-                result += stringifyImpl(node.applications[i], compact);
-                if ((i + 1) !== iz) {
-                    result += compact ? ',' : ', ';
-                }
-            }
-            result += '>';
-            break;
-
-        default:
-            throw new Error('Unknown type ' + node.type);
-        }
-
-        return result;
-    }
-
-    function stringify(node, options) {
-        if (options == null) {
-            options = {};
-        }
-        return stringifyImpl(node, options.compact, options.topLevel);
-    }
-
     exports.parseType = parseType;
     exports.parseParamType = parseParamType;
-    exports.stringify = stringify;
-    exports.Syntax = Syntax;
 }(typed = {}));
 
 // JSDoc Tag Parser
@@ -1368,8 +1199,7 @@ function unwrapComment(doc) {
     var index,
         length,
         source,
-        recoverable,
-        sloppy;
+        recoverable;
 
     function advance() {
         var ch = source[index];
@@ -1480,8 +1310,8 @@ function unwrapComment(doc) {
         }
     }
 
-    function parseName(last, allowBraces) {
-        var range, ch, name, i, len, useBraces;
+    function parseName(last) {
+        var range, ch, name, i, len;
 
         // skip white spaces
         while (index < last && (isWhiteSpace(source[index]) || isLineTerminator(source[index]))) {
@@ -1493,11 +1323,7 @@ function unwrapComment(doc) {
         }
 
         if (!isIdentifierStart(source[index])) {
-            if (allowBraces && source[index] === '[') {
-                useBraces = true;
-            } else {
-                return;
-            }
+            return;
         }
 
         name = advance();
@@ -1508,16 +1334,9 @@ function unwrapComment(doc) {
                 advance();
                 break;
             }
-            if (useBraces && source[index] === ']') {
-                name += advance();
-                break;
-            }
             if (!isIdentifierPart(ch)) {
                 return;
             }
-            name += advance();
-        }
-        if (useBraces && source[index] === ']') {
             name += advance();
         }
 
@@ -1534,20 +1353,14 @@ function unwrapComment(doc) {
 
     function scanDescription() {
         var description = '';
-        while (index < length && source[index] !== '@') {
+        while (index < length && source[index] != '@') {
             description += advance();
         }
         return description;
     }
 
     function next() {
-        var tag, title, type, last, description, newType;
-        function addError(errorText) {
-            if (!tag.errors) {
-                tag.errors = [];
-            }
-            tag.errors.push(errorText);
-        }
+        var tag, title, type, last, description;
 
         // skip to tag
         while (index < length && source[index] !== '@') {
@@ -1562,51 +1375,32 @@ function unwrapComment(doc) {
         // scan title
         title = scanTitle();
 
-        tag = {
-            title: title,
-            description: null
-        };
-
         // empty title
-        if (!title) {
-            addError("Missing or invalid title");
-            if (!recoverable) {
-                return;
-            }
+        if (!title && !recoverable) {
+            return;
         }
 
         // seek to content last index
         last = seekContent(title);
 
+        tag = {
+            title: title,
+            description: null
+        };
+
         // type required titles
         if (isTypeParameterRequired(title)) {
             tag.type = parseType(title, last);
-            if (!tag.type) {
-                addError("Missing or invalid tag type");
-                if (!recoverable) {
-                    return;
-                }
+            if (!tag.type && !recoverable) {
+                return;
             }
         }
 
         // param, property requires name
         if (title === 'param' || title === 'property') {
-            tag.name = parseName(last, sloppy && title === 'param');
-            if (!tag.name) {
-                addError("Missing or invalid tag name");
-                if (!recoverable) {
-                    return;
-                }
-            } else {
-                if (tag.name.charAt(0) === '[' && tag.name.charAt(tag.name.length - 1) === ']') {
-                    // convert to an optional type
-                    tag.name = tag.name.substring(1, tag.name.length - 1);
-                    newType = {
-                        type: "OptionalType",
-                        expression: tag.type
-                    };
-                    tag.type = newType;
-                }
+            tag.name = parseName(last);
+            if (!tag.name && !recoverable) {
+                return;
             }
         }
 
@@ -1624,7 +1418,7 @@ function unwrapComment(doc) {
     }
 
     function parse(comment, options) {
-        var tags = [], tag, description, interestingTags, i, iz;
+        var tags = [], tag, description, interestingTags;
 
         if (options === undefined) {
             options = {};
@@ -1635,12 +1429,12 @@ function unwrapComment(doc) {
         } else {
             source = comment;
         }
-
+        
         // array of relevant tags
         if (options.tags) {
             if (isArray(options.tags)) {
                 interestingTags = { };
-                for (i = 0, iz = options.tags.length; i < iz; i++) {
+                for (var i = 0; i < options.tags.length; i++) {
                     if (typeof options.tags[i] === 'string') {
                         interestingTags[options.tags[i]] = true;
                     } else {
@@ -1659,10 +1453,9 @@ function unwrapComment(doc) {
         length = source.length;
         index = 0;
         recoverable = options.recoverable;
-        sloppy = options.sloppy;
 
         description = trim(scanDescription());
-
+        
         while (true) {
             tag = next();
             if (!tag) {
@@ -1678,6 +1471,7 @@ function unwrapComment(doc) {
             tags: tags
         };
     }
+
     exports.parse = parse;
 }(jsdoc = {}));
 
@@ -1687,11 +1481,5 @@ exports.parseType = typed.parseType;
 exports.parseParamType = typed.parseParamType;
 exports.unwrapComment = unwrapComment;
 exports.Syntax = shallowCopy(typed.Syntax);
-exports.type = {
-    Syntax: exports.Syntax,
-    parseType: typed.parseType,
-    parseParamType: typed.parseParamType,
-    stringify: typed.stringify
-};
 // }(typeof exports === 'undefined' ? (doctrine = {}) : exports));
 /* vim: set sw=4 ts=4 et tw=80 : */

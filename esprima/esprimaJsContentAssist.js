@@ -8,36 +8,32 @@
  * http://www.opensource.org/licenses/eclipse-1.0.php
  *
  * Contributors:
- *	 Andy Clement (VMware) - initial API and implementation
- *	 Andrew Eisenberg (VMware) - implemented visitor pattern
+ *     Andy Clement (VMware) - initial API and implementation
+ *     Andrew Eisenberg (VMware) - implemented visitor pattern
  ******************************************************************************/
 
-/*global define esprima doctrine */
-// define("esprima/esprimaVisitor", ["esprima/types", "esprima/proposalUtils", "scriptedLogger", "esprima/esprima"],
-// 		function(mVisitor, mTypes, proposalUtils, scriptedLogger) {
+/*global define require eclipse esprima window */
+// define("plugins/esprima/esprimaJsContentAssist", ["plugins/esprima/esprimaVisitor", "plugins/esprima/types", "plugins/esprima/proposalUtils"],
+//         function(mVisitor, mTypes, proposalUtils, scriptedLogger) {
+mVisitor = require('./esprimaVisitor.js');
+mTypes = require('./types.js');
+proposalUtils = require('./proposalUtils');
 
-var mVisitor = require('./esprimaVisitor.js');
-var mTypes = require('./types.js');
-var proposalUtils = require('./proposalUtils.js');
-
-/**
- * TODO move this to a central location
- * @type {function(obj):Boolean} a safe way of checking for arrays
- */
+/** @type {function(obj):Boolean} a safe way of checking for arrays */
 var isArray = Array.isArray;
 if (!isArray) {
-	isArray = function isArray(ary) {
-		return Object.prototype.toString.call(ary) === '[object Array]';
-	};
+    isArray = function isArray(ary) {
+        return Object.prototype.toString.call(ary) === '[object Array]';
+    };
 }
 
 var RESERVED_WORDS = {
-	"break" : true, "case" : true, "catch" : true, "continue" : true, "debugger" : true, "default" : true, "delete" : true, "do" : true, "else" : true, "finally" : true,
-	"for" : true, "function" : true, "if" : true, "in" : true, "instanceof" : true, "new" : true, "return" : true, "switch" : true, "this" : true, "throw" : true, "try" : true, "typeof" : true,
-	"var" : true, "void" : true, "while" : true, "with" : true
+    "break" : true, "case" : true, "catch" : true, "continue" : true, "debugger" : true, "default" : true, "delete" : true, "do" : true, "else" : true, "finally" : true,
+    "for" : true, "function" : true, "if" : true, "in" : true, "instanceof" : true, "new" : true, "return" : true, "switch" : true, "this" : true, "throw" : true, "try" : true, "typeof" : true,
+    "var" : true, "void" : true, "while" : true, "with" : true
 };
 function isReserverdWord(name) {
-	return RESERVED_WORDS[name] === true;
+    return RESERVED_WORDS[name] === true;
 }
 
 /**
@@ -45,14 +41,14 @@ function isReserverdWord(name) {
  * @return {boolean} true iff uppercase ascii character
  */
 function isUpperCaseChar(c) {
-	if (c.length < 1) {
-		return false;
-	}
-	var charCode = c.charCodeAt(0);
-	if (isNaN(charCode)) {
-		return false;
-	}
-	return charCode >= 65 && charCode <= 90;
+    if (c.length < 1) {
+        return false;
+    }
+    var charCode = c.charCodeAt(0);
+    if (isNaN(charCode)) {
+        return false;
+    }
+    return charCode >= 65 && charCode <= 90;
 }
 
 /**
@@ -61,26 +57,26 @@ function isUpperCaseChar(c) {
  * @return {{name:String}}
  */
 function findRightMost(node) {
-	if (!node) {
-		return null;
-	} else if (node.type === "Identifier") {
-		return node;
-	} else if (node.type === "MemberExpression") {
-		if (node.computed) {
-			if (node.property.type === "Literal" && typeof node.property.value === "string") {
-				return node.property;
-			} else {
-				// an array access
-				return node;
-			}
-		} else {
-			return findRightMost(node.property);
-		}
-	} else if (node.type === "ArrayExpression") {
-		return node;
-	} else {
-		return null;
-	}
+    if (!node) {
+        return null;
+    } else if (node.type === "Identifier") {
+        return node;
+    } else if (node.type === "MemberExpression") {
+        if (node.computed) {
+            if (node.property.type === "Literal" && typeof node.property.value === "string") {
+                return node.property;
+            } else {
+                // an array access
+                return node;
+            }
+        } else {
+            return findRightMost(node.property);
+        }
+    } else if (node.type === "ArrayExpression") {
+        return node;
+    } else {
+        return null;
+    }
 }
 
 /**
@@ -89,69 +85,64 @@ function findRightMost(node) {
  * @return {String}
  */
 function findDottedName(node) {
-	if (!node) {
-		return "";
-	} else if (node.type === "Identifier") {
-		return node.name;
-	} else if (node.type === "MemberExpression") {
-		var left = findDottedName(node.object);
-		var right = findDottedName(node.property);
-		if (left.length > 0 && right.length > 0) {
-			return left + "." + right;
-		}
-		return left + right;
-	} else if (node.type === "CallExpression") {
-		return findDottedName(node.callee);
-	} else {
-		return "";
-	}
+    if (!node) {
+        return "";
+    } else if (node.type === "Identifier") {
+        return node.name;
+    } else if (node.type === "MemberExpression") {
+        var left = findDottedName(node.object);
+        var right = findDottedName(node.property);
+        if (left.length > 0 && right.length > 0) {
+            return left + "." + right;
+        }
+        return left + right;
+    } else if (node.type === "CallExpression") {
+        return findDottedName(node.callee);
+    } else {
+        return "";
+    }
 }
 
 /**
  * Convert an array of parameters into a string and also compute linked editing positions
  * @param {String} name name of the function
- * @param {{}} typeObj the type object of the function
+ * @param {String} type the type of the function using the following structure '?Type:arg1,arg2,...'
  * @param {Number} offset offset
- * @return {{ completion:String, positions:[Number] }}
+ * @return {{ completion:String, positions:Array.<Number> }}
  */
-function calculateFunctionProposal(name, typeObj, offset) {
-	var params = typeObj.params || [];
-	var ret = typeObj.result;
-
-	var positions = [];
-	var completion = name + '(';
-	var plen = params.length;
-	for (var p = 0; p < plen; p++) {
-		if (params[p].name === 'new' || params[p].name === 'this') {
-			continue;
-		}
-		if (p > 0) {
-			completion += ', ';
-		}
-		var param = params[p];
-		var optional, rest;
-		if (param.type === 'OptionalType') {
-			param = param.expression;
-			optional=true;
-		}
-
-		if (param.type === 'RestType') {
-			param = param.expression;
-			rest = true;
-		}
-
-		var argName = param.name || 'arg' + p;
-		if (rest) {
-			argName = '...' + argName;
-		}
-		if (optional) {
-			argName = '[' + argName + ']';
-		}
-		positions.push({offset:offset+completion.length+1, length: argName.length});
-		completion += argName;
-	}
-	completion += ')';
-	return {completion: completion, positions: positions.length === 0 ? null : positions};
+function calculateFunctionProposal(name, type, offset) {
+    var paramsOffset = mTypes.findReturnTypeEnd(type), paramsStr, params;
+    paramsStr = paramsOffset > 0 ? type.substring(paramsOffset+1) : "";
+    params = paramsStr.split(",");
+    if (!paramsStr || params.length === 0) {
+        return {completion: name + "()", positions:null};
+    }
+    var positions = [];
+    var completion = name + '(';
+    var plen = params.length;
+    for (var p = 0; p < plen; p++) {
+        if (p > 0) {
+            completion += ', ';
+        }
+        var argName;
+        if (typeof params[p] === "string") {
+            // need this because jslintworker.js augments the String prototype with a name() function
+            // don't want confusion
+            argName = params[p];
+            var slashIndex = argName.indexOf('/');
+            if (slashIndex > 0) {
+                argName = argName.substring(0, slashIndex);
+            }
+        } else if (params[p].name) {
+            argName = params[p].name();
+        } else {
+            argName = params[p];
+        }
+        positions.push({offset:offset+completion.length+1, length: argName.length});
+        completion += argName;
+    }
+    completion += ')';
+    return {completion: completion, positions: positions.length === 0 ? null : positions};
 }
 
 /**
@@ -160,21 +151,21 @@ function calculateFunctionProposal(name, typeObj, offset) {
  * the first char and exclusive of the last char, must
  * use a +1 at the end.
  * eg- (^ is the line start)
- *	   ^x	---> range[0,0]
- *	   ^  xx ---> range[2,3]
+ *       ^x    ---> range[0,0]
+ *       ^  xx ---> range[2,3]
  */
 function inRange(offset, range, includeEdge) {
-	return range[0] <= offset && (includeEdge ? range[1] >= offset : range[1] > offset);
+    return range[0] <= offset && (includeEdge ? range[1] >= offset : range[1] > offset);
 }
 /**
  * checks that offset is before the range
  * @return Boolean
  */
 function isBefore(offset, range) {
-	if (!range) {
-		return true;
-	}
-	return offset < range[0];
+    if (!range) {
+        return true;
+    }
+    return offset < range[0];
 }
 
 /**
@@ -189,36 +180,36 @@ function isBefore(offset, range) {
  * @return Boolean
  */
 function afterDot(offset, memberExpr, contents) {
-	// check for broken AST
-	var end;
-	if (memberExpr.property) {
-		end = memberExpr.property.range[0];
-	} else {
-		// no property expression, use the end of the memberExpr as the end to look at
-		// in this case assume that the member expression ends just after the dot
-		// this allows content assist invocations to work on the member expression when there
-		// is no property
-		end = memberExpr.range[1] + 2;
-	}
-	// we are not considered "after" the dot if the offset
-	// overlaps with the property expression or if the offset is
-	// after the end of the member expression
-	if (!inRange(offset-1, memberExpr.range) ||
-		inRange(offset-1, memberExpr.object.range) ||
-		offset > end) {
-		return false;
-	}
+    // check for broken AST
+    var end;
+    if (memberExpr.property) {
+        end = memberExpr.property.range[0];
+    } else {
+        // no property expression, use the end of the memberExpr as the end to look at
+        // in this case assume that the member expression ends just after the dot
+        // this allows content assist invocations to work on the member expression when there
+        // is no property
+        end = memberExpr.range[1] + 2;
+    }
+    // we are not considered "after" the dot if the offset
+    // overlaps with the property expression or if the offset is
+    // after the end of the member expression
+    if (!inRange(offset-1, memberExpr.range) ||
+        inRange(offset-1, memberExpr.object.range) ||
+        offset > end) {
+        return false;
+    }
 
-	var dotLoc = memberExpr.object.range[1];
-	while (contents.charAt(dotLoc) !== "." && dotLoc < end) {
-		dotLoc++;
-	}
+    var dotLoc = memberExpr.object.range[1];
+    while (contents.charAt(dotLoc) !== "." && dotLoc < end) {
+        dotLoc++;
+    }
 
-	if (contents.charAt(dotLoc) !== ".") {
-		return false;
-	}
+    if (contents.charAt(dotLoc) !== ".") {
+        return false;
+    }
 
-	return dotLoc < offset;
+    return dotLoc < offset;
 }
 
 /**
@@ -227,99 +218,99 @@ function afterDot(offset, memberExpr, contents) {
  * @return {Boolean|String}
  */
 function shouldVisit(root, offset, prefix, contents) {
-	/**
-	 * A visitor that finds the parent stack at the given location
-	 * @param node the AST node being visited
-	 * @param parents stack of parent nodes for the current node
-	 * @param isInitialVisit true iff this is the first visit of the node, false if this is
-	 *   the end visit of the node
-	 */
-	var findParent = function(node, parents, isInitialVisit) {
-		// extras prop is where we stuff everything that we have added
-		if (!node.extras) {
-			node.extras = {};
-		}
+    /**
+     * A visitor that finds the parent stack at the given location
+     * @param node the AST node being visited
+     * @param parents stack of parent nodes for the current node
+     * @param isInitialVisit true iff this is the first visit of the node, false if this is
+     *   the end visit of the node
+     */
+    var findParent = function(node, parents, isInitialVisit) {
+        // extras prop is where we stuff everything that we have added
+        if (!node.extras) {
+            node.extras = {};
+        }
 
-		if (!isInitialVisit) {
+        if (!isInitialVisit) {
 
-			// if we have reached the end of an inRange block expression then
-			// this means we are completing on an empty expression
-			if (node.type === "Program" || (node.type === "BlockStatement") &&
-					inRange(offset, node.range)) {
-				throw "done";
-			}
+            // if we have reached the end of an inRange block expression then
+            // this means we are completing on an empty expression
+            if (node.type === "Program" || (node.type === "BlockStatement") &&
+                    inRange(offset, node.range)) {
+                throw "done";
+            }
 
-			parents.pop();
-			// return value is ignored
-			return false;
-		}
+            parents.pop();
+            // return value is ignored
+            return false;
+        }
 
-		// the program node is always in range even if the range numbers do not line up
-		if ((node.range && inRange(offset-1, node.range)) || node.type === "Program") {
-			if (node.type === "Identifier") {
-				throw "done";
-			}
-			parents.push(node);
-			if ((node.type === "FunctionDeclaration" || node.type === "FunctionExpression") &&
-					node.nody && isBefore(offset, node.body.range)) {
-				// completion occurs on the word "function"
-				throw "done";
-			}
-			// special case where we are completing immediately after a '.'
-			if (node.type === "MemberExpression" && !node.property && afterDot(offset, node, contents)) {
-				throw "done";
-			}
-			return true;
-		} else {
-			return false;
-		}
-	};
-	var parents = [];
-	try {
-		mVisitor.visit(root, parents, findParent, findParent);
-	} catch (done) {
-		if (done !== "done") {
-			// a real error
-			throw(done);
-		}
-	}
+        // the program node is always in range even if the range numbers do not line up
+        if ((node.range && inRange(offset-1, node.range)) || node.type === "Program") {
+            if (node.type === "Identifier") {
+                throw "done";
+            }
+            parents.push(node);
+            if ((node.type === "FunctionDeclaration" || node.type === "FunctionExpression") &&
+                    node.nody && isBefore(offset, node.body.range)) {
+                // completion occurs on the word "function"
+                throw "done";
+            }
+            // special case where we are completing immediately after a '.'
+            if (node.type === "MemberExpression" && !node.property && afterDot(offset, node, contents)) {
+                throw "done";
+            }
+            return true;
+        } else {
+            return false;
+        }
+    };
+    var parents = [];
+    try {
+        mVisitor.visit(root, parents, findParent, findParent);
+    } catch (done) {
+        if (done !== "done") {
+            // a real error
+            throw(done);
+        }
+    }
 
-	// determine if we need to defer infering the enclosing function block
-	var toDefer;
-	if (parents && parents.length) {
-		var parent = parents.pop();
-		for (var i = 0; i < parents.length; i++) {
-			if ((parents[i].type === "FunctionDeclaration" || parents[i].type === "FunctionExpression") &&
-					// don't defer if offset is over the function name
-					!(parents[i].id && inRange(offset, parents[i].id.range, true))) {
-				toDefer = parents[i];
-				break;
-			}
+    // determine if we need to defer infering the enclosing function block
+    var toDefer;
+    if (parents && parents.length) {
+        var parent = parents.pop();
+        for (var i = 0; i < parents.length; i++) {
+            if ((parents[i].type === "FunctionDeclaration" || parents[i].type === "FunctionExpression") &&
+                    // don't defer if offset is over the function name
+                    !(parents[i].id && inRange(offset, parents[i].id.range, true))) {
+                toDefer = parents[i];
+                break;
+            }
 
-		}
+        }
 
-		if (parent.type === "MemberExpression") {
-			if (parent.property && inRange(offset-1, parent.property.range)) {
-				// on the right hand side of a property, eg: foo.b^
-				return { kind : "member", toDefer : toDefer };
-			} else if (inRange(offset-1, parent.range) && afterDot(offset, parent, contents)) {
-				// on the right hand side of a dot with no text after, eg: foo.^
-				return { kind : "member", toDefer : toDefer };
-			}
-		} else if (parent.type === "Program" || parent.type === "BlockStatement") {
-			// completion at a new expression
-			if (!prefix) {
-			}
-		} else if (parent.type === "VariableDeclarator" && (!parent.init || isBefore(offset, parent.init.range))) {
-			// the name of a variable declaration
-			return false;
-		} else if ((parent.type === "FunctionDeclaration" || parent.type === "FunctionExpression") &&
-				isBefore(offset, parent.body.range)) {
-			// a function declaration
-			return false;
-		}
-	}
-	return { kind : "top", toDefer : toDefer };
+        if (parent.type === "MemberExpression") {
+            if (parent.property && inRange(offset-1, parent.property.range)) {
+                // on the right hand side of a property, eg: foo.b^
+                return { kind : "member", toDefer : toDefer };
+            } else if (inRange(offset-1, parent.range) && afterDot(offset, parent, contents)) {
+                // on the right hand side of a dot with no text after, eg: foo.^
+                return { kind : "member", toDefer : toDefer };
+            }
+        } else if (parent.type === "Program" || parent.type === "BlockStatement") {
+            // completion at a new expression
+            if (!prefix) {
+            }
+        } else if (parent.type === "VariableDeclarator" && (!parent.init || isBefore(offset, parent.init.range))) {
+            // the name of a variable declaration
+            return false;
+        } else if ((parent.type === "FunctionDeclaration" || parent.type === "FunctionExpression") &&
+                isBefore(offset, parent.body.range)) {
+            // a function declaration
+            return false;
+        }
+    }
+    return { kind : "top", toDefer : toDefer };
 }
 
 /**
@@ -329,107 +320,108 @@ function shouldVisit(root, offset, prefix, contents) {
  * null if there is no return statement
  */
 function findReturn(node) {
-	if (!node) {
-		return null;
-	}
-	var type = node.type, maybe, i, last;
-	// since we are finding the last return statement, start from the end
-	switch(type) {
-	case "BlockStatement":
-		if (node.body && node.body.length > 0) {
-			last = node.body[node.body.length-1];
-			if (last.type === "ReturnStatement") {
-				return last;
-			} else {
-				return findReturn(last);
-			}
-		}
-		return null;
-	case "WhileStatement":
-	case "DoWhileStatement":
-	case "ForStatement":
-	case "ForInStatement":
-	case "CatchClause":
+    if (!node) {
+        return null;
+    }
+    var type = node.type, maybe, i, last;
+    // since we are finding the last return statement, start from the end
+    switch(type) {
+    case "BlockStatement":
+        if (node.body && node.body.length > 0) {
+            last = node.body[node.body.length-1];
+            if (last.type === "ReturnStatement") {
+                return last;
+            } else {
+                return findReturn(last);
+            }
+        }
+        return null;
+    case "WhileStatement":
+    case "DoWhileStatement":
+    case "ForStatement":
+    case "ForInStatement":
+    case "CatchClause":
 
-		return findReturn(node.body);
-	case "IfStatement":
-		maybe = findReturn(node.alternate);
-		if (!maybe) {
-			maybe = findReturn(node.consequent);
-		}
-		return maybe;
-	case "TryStatement":
-		maybe = findReturn(node.finalizer);
-		var handlers = node.handlers;
-		if (!maybe && handlers) {
-			// start from the last handler
-			for (i = handlers.length-1; i >= 0; i--) {
-				maybe = findReturn(handlers[i]);
-				if (maybe) {
-					break;
-				}
-			}
-		}
-		if (!maybe) {
-			maybe = findReturn(node.block);
-		}
-		return maybe;
-	case "SwitchStatement":
-		var cases = node.cases;
-		if (cases) {
-			// start from the last handler
-			for (i = cases.length-1; i >= 0; i--) {
-				maybe = findReturn(cases[i]);
-				if (maybe) {
-					break;
-				}
-			}
-		}
-		return maybe;
-	case "SwitchCase":
-		if (node.consequent && node.consequent.length > 0) {
-			last = node.consequent[node.consequent.length-1];
-			if (last.type === "ReturnStatement") {
-				return last;
-			} else {
-				return findReturn(last);
-			}
-		}
-		return null;
+        return findReturn(node.body);
+    case "IfStatement":
+        maybe = findReturn(node.alternate);
+        if (!maybe) {
+            maybe = findReturn(node.consequent);
+        }
+        return maybe;
+    case "TryStatement":
+        maybe = findReturn(node.finalizer);
+        var handlers = node.handlers;
+        if (!maybe && handlers) {
+            // start from the last handler
+            for (i = handlers.length-1; i >= 0; i--) {
+                maybe = findReturn(handlers[i]);
+                if (maybe) {
+                    break;
+                }
+            }
+        }
+        if (!maybe) {
+            maybe = findReturn(node.block);
+        }
+        return maybe;
+    case "SwitchStatement":
+        var cases = node.cases;
+        if (cases) {
+            // start from the last handler
+            for (i = cases.length-1; i >= 0; i--) {
+                maybe = findReturn(cases[i]);
+                if (maybe) {
+                    break;
+                }
+            }
+        }
+        return maybe;
+    case "SwitchCase":
+        if (node.consequent && node.consequent.length > 0) {
+            last = node.consequent[node.consequent.length-1];
+            if (last.type === "ReturnStatement") {
+                return last;
+            } else {
+                return findReturn(last);
+            }
+        }
+        return null;
 
-	case "ReturnStatement":
-		return node;
-	default:
-		// don't visit nested functions
-		// expression statements, variable declarations,
-		// or any other kind of node
-		return null;
-	}
+    case "ReturnStatement":
+        return node;
+    default:
+        // don't visit nested functions
+        // expression statements, variable declarations,
+        // or any other kind of node
+        return null;
+    }
 }
 
 /**
  * updates a function type to include a new return type.
- * makes a copy of the functiontype
- * TODO this is not a deep copy...should it be?
- * TOD move to mTypes
+ * function types are specified like this: ?returnType:[arg-n...]
+ * return type is the name of the return type, arg-n is the name of
+ * the nth argument.
  */
-function updateReturnType(originalFunctionTypeObj, newReturnTypeObj) {
-	if (! originalFunctionTypeObj || originalFunctionTypeObj.type !== "FunctionType") {
-		return newReturnTypeObj;
-	} else {
-		var newFunctionTypeObj = {
-			type: originalFunctionTypeObj.type,
-			params: originalFunctionTypeObj.params,
-			result: newReturnTypeObj
-		};
-		if (originalFunctionTypeObj['this']) {
-			newFunctionTypeObj['this'] = originalFunctionTypeObj['this'];
-		}
-		if (originalFunctionTypeObj['new']) {
-			newFunctionTypeObj['new'] = originalFunctionTypeObj['new'];
-		}
-		return newFunctionTypeObj;
-	}
+function updateReturnType(originalFunctionType, newReturnType) {
+    if (! originalFunctionType) {
+        // not a valid function type
+        return newReturnType;
+    }
+
+    var firstChar = originalFunctionType.charAt(0);
+    if (firstChar !== "?" && firstChar !== "*") {
+        // not a valid function type
+        return newReturnType;
+    }
+
+    var end = mTypes.findReturnTypeEnd(originalFunctionType);
+    if (end < 0) {
+        // not a valid function type
+        return newReturnType;
+    }
+    return firstChar + newReturnType + originalFunctionType.substring(end);
 }
 /**
  * checks to see if this file looks like an AMD module
@@ -438,18 +430,18 @@ function updateReturnType(originalFunctionTypeObj, newReturnTypeObj) {
  * @return true iff there is a top-level call to 'define'
  */
 function checkForAMD(node) {
-	var body = node.body;
-	if (body && body.length >= 1 && body[0]) {
-		if (body[0].type === "ExpressionStatement" &&
-			body[0].expression &&
-			body[0].expression.type === "CallExpression" &&
-			body[0].expression.callee.name === "define") {
+    var body = node.body;
+    if (body && body.length >= 1 && body[0]) {
+        if (body[0].type === "ExpressionStatement" &&
+            body[0].expression &&
+            body[0].expression.type === "CallExpression" &&
+            body[0].expression.callee.name === "define") {
 
-			// found it.
-			return body[0].expression;
-		}
-	}
-	return null;
+            // found it.
+            return body[0].expression;
+        }
+    }
+    return null;
 }
 /**
  * checks to see if this file looks like a wrapped commonjs module
@@ -458,34 +450,34 @@ function checkForAMD(node) {
  * @return true iff there is a top-level call to 'define'
  */
 function checkForCommonjs(node) {
-	var body = node.body;
-	if (body && body.length >= 1) {
-		for (var i = 0; i < body.length; i++) {
-			if (body[i] &&
-				body[i].type === "ExpressionStatement" &&
-				body[i].expression &&
-				body[i].expression.type === "CallExpression" &&
-				body[i].expression.callee.name === "define") {
+    var body = node.body;
+    if (body && body.length >= 1) {
+        for (var i = 0; i < body.length; i++) {
+            if (body[i] &&
+                body[i].type === "ExpressionStatement" &&
+                body[i].expression &&
+                body[i].expression.type === "CallExpression" &&
+                body[i].expression.callee.name === "define") {
 
-				var callee = body[i].expression;
-				if (callee["arguments"] &&
-					callee["arguments"].length === 1 &&
-					callee["arguments"][0].type === "FunctionExpression" &&
-					callee["arguments"][0].params.length === 3) {
+                var callee = body[i].expression;
+                if (callee["arguments"] &&
+                    callee["arguments"].length === 1 &&
+                    callee["arguments"][0].type === "FunctionExpression" &&
+                    callee["arguments"][0].params.length === 3) {
 
-					var params = callee["arguments"][0].params;
-					if (params[0].name === "require" &&
-						params[1].name === "exports" &&
-						params[2].name === "module") {
+                    var params = callee["arguments"][0].params;
+                    if (params[0].name === "require" &&
+                        params[1].name === "exports" &&
+                        params[2].name === "module") {
 
-						// found it.
-						return body[i].expression;
-					}
-				}
-			}
-		}
-	}
-	return null;
+                        // found it.
+                        return body[i].expression;
+                    }
+                }
+            }
+        }
+    }
+    return null;
 }
 
 /**
@@ -494,34 +486,34 @@ function checkForCommonjs(node) {
  * if a summary is found, then apply it to the current scope
  */
 function extractRequireModule(call, env) {
-	if (!env.indexer) {
-		return;
-	}
-	if (call.type === "CallExpression" && call.callee.type === "Identifier" &&
-		call.callee.name === "require" && call["arguments"].length === 1) {
+    if (!env.indexer) {
+        return;
+    }
+    if (call.type === "CallExpression" && call.callee.type === "Identifier" &&
+        call.callee.name === "require" && call["arguments"].length === 1) {
 
-		var arg = call["arguments"][0];
-		if (arg.type === "Literal" && typeof arg.value === "string") {
-			// we're in business
-			var summary = env.indexer.retrieveSummary(arg.value);
-			if (summary) {
-				var typeName;
-				var mergeTypeName;
-				if (typeof summary.provided === "string") {
-					mergeTypeName = typeName = summary.provided;
-				} else {
-					// module provides a composite type
-					// must create a type to add the summary to
-					mergeTypeName = typeName = env.newScope();
-					env.popScope();
-				}
-				env.mergeSummary(summary, mergeTypeName);
-				return mTypes.ensureTypeObject(typeName);
-			}
-		}
-	}
+        var arg = call["arguments"][0];
+        if (arg.type === "Literal" && typeof arg.value === "string") {
+            // we're in business
+            var summary = env.indexer.retrieveSummary(arg.value);
+            if (summary) {
+                var typeName;
+                var mergeTypeName;
+                if (typeof summary.provided === "string") {
+                    mergeTypeName = typeName = summary.provided;
+                } else {
+                    // module provides a composite type
+                    // must create a type to add the summary to
+                    mergeTypeName = typeName = env.newScope();
+                    env.popScope();
+                }
+                env.mergeSummary(summary, mergeTypeName);
+                return typeName;
+            }
+        }
+    }
 
-	return;
+    return;
 }
 
 /**
@@ -531,57 +523,57 @@ function extractRequireModule(call, env) {
  * if this is not a module definition, then just return an array of Object for each typ
  */
 function findModuleDefinitions(fnode, env) {
-	var paramTypes = [], params = fnode.params, i;
-	if (params.length > 0) {
-		if (!fnode.extras) {
-			fnode.extras = {};
-		}
-		if (env.indexer && fnode.extras.amdDefn) {
-			var args = fnode.extras.amdDefn["arguments"];
-			// the function definition must be the last argument of the call to define or require
-			if (args.length > 1 && args[args.length-1] === fnode) {
-				// the module names could be the first or second argument
-				var moduleNames = null;
-				if (args.length === 3 && args[0].type === "Literal" && args[1].type === "ArrayExpression") {
-					moduleNames = args[1].elements;
-				} else if (args.length === 2 && args[0].type === "ArrayExpression") {
-					moduleNames = args[0].elements;
-				}
-				if (moduleNames) {
-					for (i = 0; i < params.length; i++) {
-						if (i < moduleNames.length && moduleNames[i].type === "Literal") {
-							// resolve the module name from the indexer
-							var summary = env.indexer.retrieveSummary(moduleNames[i].value);
-							if (summary) {
-								var typeName;
-								var mergeTypeName;
-								if (typeof summary.provided === "string") {
-									mergeTypeName = typeName = summary.provided;
-								} else {
-									// module provides a composite type
-									// must create a type to add the summary to
-									mergeTypeName = typeName = env.newScope();
-									env.popScope();
-								}
-								env.mergeSummary(summary, mergeTypeName);
-								paramTypes.push(typeName);
-							} else {
-								paramTypes.push(env.newFleetingObject());
-							}
-						} else {
-							paramTypes.push(mTypes.OBJECT_TYPE);
-						}
-					}
-				}
-			}
-		}
-	}
-	if (paramTypes.length === 0) {
-		for (i = 0; i < params.length; i++) {
-			paramTypes.push(env.newFleetingObject());
-		}
-	}
-	return paramTypes;
+    var paramTypes = [], params = fnode.params, i;
+    if (params.length > 0) {
+        if (!fnode.extras) {
+            fnode.extras = {};
+        }
+        if (env.indexer && fnode.extras.amdDefn) {
+            var args = fnode.extras.amdDefn["arguments"];
+            // the function definition must be the last argument of the call to define or require
+            if (args.length > 1 && args[args.length-1] === fnode) {
+                // the module names could be the first or second argument
+                var moduleNames = null;
+                if (args.length === 3 && args[0].type === "Literal" && args[1].type === "ArrayExpression") {
+                    moduleNames = args[1].elements;
+                } else if (args.length === 2 && args[0].type === "ArrayExpression") {
+                    moduleNames = args[0].elements;
+                }
+                if (moduleNames) {
+                    for (i = 0; i < params.length; i++) {
+                        if (i < moduleNames.length && moduleNames[i].type === "Literal") {
+                            // resolve the module name from the indexer
+                            var summary = env.indexer.retrieveSummary(moduleNames[i].value);
+                            if (summary) {
+                                var typeName;
+                                var mergeTypeName;
+                                if (typeof summary.provided === "string") {
+                                    mergeTypeName = typeName = summary.provided;
+                                } else {
+                                    // module provides a composite type
+                                    // must create a type to add the summary to
+                                    mergeTypeName = typeName = env.newScope();
+                                    env.popScope();
+                                }
+                                env.mergeSummary(summary, mergeTypeName);
+                                paramTypes.push(typeName);
+                            } else {
+                                paramTypes.push(env.newFleetingObject());
+                            }
+                        } else {
+                            paramTypes.push("Object");
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if (paramTypes.length === 0) {
+        for (i = 0; i < params.length; i++) {
+            paramTypes.push(env.newFleetingObject());
+        }
+    }
+    return paramTypes;
 }
 
 
@@ -592,13 +584,13 @@ function findModuleDefinitions(fnode, env) {
  * @return {{value:String,range:Array.<Number>}}
  */
 function findAssociatedCommentBlock(node, doccomments) {
-	// look for closest doc comment that is before the start of this node
-	// just shift all the other ones
-	var candidate;
-	while (doccomments.length > 0 && doccomments[0].range[0] < node.range[0]) {
-		candidate = doccomments.shift();
-	}
-	return candidate || { value : null };
+    // look for closest doc comment that is before the start of this node
+    // just shift all the other ones
+    var candidate;
+    while (doccomments.length > 0 && doccomments[0].range[0] < node.range[0]) {
+        candidate = doccomments.shift();
+    }
+    return candidate || { value : null };
 }
 
 
@@ -610,28 +602,28 @@ function findAssociatedCommentBlock(node, doccomments) {
  * @return {{value:String,range:Array.<Number>}} array elements that are removed
  */
 function extractDocComments(doccomments, range) {
-	var start = 0, end = 0, i, docStart, docEnd;
-	for (i = 0; i < doccomments.length; i++) {
-		docStart = doccomments[i].range[0];
-		docEnd = doccomments[i].range[1];
-		if (!isBefore(docStart, range) || !isBefore(docEnd, range)) {
-			break;
-		}
-	}
+    var start = 0, end = 0, i, docStart, docEnd;
+    for (i = 0; i < doccomments.length; i++) {
+        docStart = doccomments[i].range[0];
+        docEnd = doccomments[i].range[1];
+        if (!isBefore(docStart, range) || !isBefore(docEnd, range)) {
+            break;
+        }
+    }
 
-	if (i < doccomments.length) {
-		start = i;
-		for (i = i; i < doccomments.length; i++) {
-			docStart = doccomments[i].range[0];
-			docEnd = doccomments[i].range[1];
-			if (!inRange(docStart, range, true) || !inRange(docEnd, range, true)) {
-				break;
-			}
-		}
-		end = i;
-	}
+    if (i < doccomments.length) {
+        start = i;
+        for (i = i; i < doccomments.length; i++) {
+            docStart = doccomments[i].range[0];
+            docEnd = doccomments[i].range[1];
+            if (!inRange(docStart, range, true) || !inRange(docEnd, range, true)) {
+                break;
+            }
+        }
+        end = i;
+    }
 
-	return doccomments.splice(start, end-start);
+    return doccomments.splice(start, end-start);
 }
 
 /**
@@ -640,351 +632,322 @@ function extractDocComments(doccomments, range) {
  * @param env the context for the visitor.  See computeProposals below for full description of contents
  */
 function inferencer(node, env) {
-	var type = node.type, name, i, property, params, newTypeObj, jsdocResult, jsdocType, docComment;
+    var type = node.type, name, i, property, params, newTypeName, jsdocResult, jsdocType;
 
-	// extras prop is where we stuff everything that we have added
-	if (!node.extras) {
-		node.extras = {};
-	}
+    // extras prop is where we stuff everything that we have added
+    if (!node.extras) {
+        node.extras = {};
+    }
 
-	switch(type) {
-	case "Program":
-		// check for module kind
-		env.commonjsModule = checkForCommonjs(node);
-		if (!env.commonjsModule) {
-			// can't be both amd and commonjs
-			env.amdModule = checkForAMD(node);
-		}
-		break;
-	case "BlockStatement":
-		node.extras.inferredTypeObj = env.newScopeObj();
-		if (node.extras.stop) {
-			// this BlockStatement inferencing is deferred until after the rest of the file is inferred
-			inferencerPostOp(node, env);
-			delete node.extras.stop;
-			return false;
-		}
-		break;
-	case "Literal":
-		break;
-	case "ArrayExpression":
-		node.extras.inferredTypeObj = mTypes.ARRAY_TYPE;
-		break;
-	case "ObjectExpression":
-		if (node.extras.fname) {
-			// this object expression is contained inside another object expression
-			env.pushName(node.extras.fname);
-		}
+    switch(type) {
+    case "Program":
+        // check for module kind
+        env.commonjsModule = checkForCommonjs(node);
+        if (!env.commonjsModule) {
+            // can't be both amd and commonjs
+            env.amdModule = checkForAMD(node);
+        }
+        break;
+    case "BlockStatement":
+        node.extras.inferredType = env.newScope();
+        if (node.extras.stop) {
+            // this BlockStatement inferencing is deferred until after the rest of the file is inferred
+            inferencerPostOp(node, env);
+            delete node.extras.stop;
+            return false;
+        }
+        break;
+    case "Literal":
+        break;
+    case "ArrayExpression":
+        node.extras.inferredType = "Array";
+        break;
+    case "ObjectExpression":
+        if (node.extras.fname) {
+            // this object expression is contained inside another object expression
+            env.pushName(node.extras.fname);
+        }
 
-		// for object literals, create a new object type so that we can stuff new properties into it.
-		// we might be able to do better by walking into the object and inferring each RHS of a
-		// key-value pair
-		newTypeObj = env.newObject(null, node.range);
-		node.extras.inferredTypeObj = newTypeObj;
-		for (i = 0; i < node.properties.length; i++) {
-			property = node.properties[i];
-			// only remember if the property is an identifier
-			if (property.key && property.key.name) {
-				// first just add as an object property (or use jsdoc if exists).
-				// after finishing the ObjectExpression, go and update
-				// all of the variables to reflect their final inferred type
-				docComment = findAssociatedCommentBlock(property.key, env.comments);
-				jsdocResult = mTypes.parseJSDocComment(docComment);
-				jsdocType = jsdocResult.type && mTypes.convertJsDocType(jsdocResult.type, env);
-				if (!property.key.extras) {
-					property.key.extras = {};
-				}
-				var keyType;
-				if (jsdocType) {
-					property.key.extras.inferredType = property.key.extras.jsdocType = keyType = jsdocType;
-				} else {
-					keyType = mTypes.OBJECT_TYPE;
-				}
-				env.addVariable(property.key.name, node, keyType, property.key.range, docComment.range);
-				property.key.extras.associatedComment = docComment;
-				// remember that this is the LHS so that we don't add the identifier to global scope
-				property.key.extras.isLHS = property.key.extras.isDecl = true;
+        // for object literals, create a new object type so that we can stuff new properties into it.
+        // we might be able to do better by walking into the object and inferring each RHS of a
+        // key-value pair
+        newTypeName = env.newObject(null, node.range);
+        node.extras.inferredType = newTypeName;
+        for (i = 0; i < node.properties.length; i++) {
+            property = node.properties[i];
+            // only remember if the property is an identifier
+            if (property.key && property.key.name) {
+                // first just add as an object property (or use jsdoc if exists).
+                // after finishing the ObjectExpression, go and update
+                // all of the variables to reflect their final inferred type
+                var docComment = findAssociatedCommentBlock(property.key, env.comments);
+                jsdocResult = mTypes.parseJSDocComment(docComment);
+                jsdocType = mTypes.convertJsDocType(jsdocResult.type, env);
+                var keyType = jsdocType ? jsdocType : "Object";
+                env.addVariable(property.key.name, node, keyType, property.key.range, docComment.range);
+                if (!property.key.extras) {
+                    property.key.extras = {};
+                }
+                property.key.extras.associatedComment = docComment;
+                // remember that this is the LHS so that we don't add the identifier to global scope
+                property.key.extras.isLHS = property.key.extras.isDecl = true;
 
-				if (property.value.type === "FunctionExpression" || property.value.type === "ObjectExpression") {
-					if (!property.value.extras) {
-						property.value.extras = {};
-					}
-					// RHS is a function, remember the name in case it is a constructor
-					property.value.extras.fname = property.key.name;
-					property.value.extras.cname = env.getQualifiedName() + property.key.name;
+                if (property.value.type === "FunctionExpression" || property.value.type === "ObjectExpression") {
+                    if (!property.value.extras) {
+                        property.value.extras = {};
+                    }
+                    // RHS is a function, remember the name in case it is a constructor
+                    property.value.extras.fname = property.key.name;
+                    property.value.extras.cname = env.getQualifiedName() + property.key.name;
 
-					if (property.value.type === "FunctionExpression") {
-						// now remember the jsdocResult so it doesn't need to be recomputed
-						property.value.extras.jsdocResult = jsdocResult;
-					}
-				}
-			}
-		}
-		break;
-	case "FunctionDeclaration":
-	case "FunctionExpression":
-		var nameRange;
-		if (node.id) {
-			// true for function declarations
-			name = node.id.name;
-			nameRange = node.id.range;
-		} else if (node.extras.fname) {
-			// true for rhs of assignment to function expression
-			name = node.extras.fname;
-			nameRange = node.range;
-		}
-		params = [];
-		if (node.params) {
-			for (i = 0; i < node.params.length; i++) {
-				params[i] = node.params[i].name;
-			}
-		}
+                    if (property.value.type === "FunctionExpression") {
+                        // now remember the jsdocResult so it doesn't need to be recomputed
+                        property.value.extras.jsdocResult = jsdocResult;
+                    }
+                }
+            }
+        }
+        break;
+    case "FunctionDeclaration":
+    case "FunctionExpression":
+        var nameRange;
+        if (node.id) {
+            // true for function declarations
+            name = node.id.name;
+            nameRange = node.id.range;
+        } else if (node.extras.fname) {
+            // true for rhs of assignment to function expression
+            name = node.extras.fname;
+            nameRange = node.range;
+        }
+        params = [];
+        if (node.params) {
+            for (i = 0; i < node.params.length; i++) {
+                params[i] = node.params[i].name;
+            }
+        }
 
-		if (node.extras.jsdocResult) {
-			jsdocResult = node.extras.jsdocResult;
-			docComment = { range : null };
-		} else {
-			docComment = node.extras.associatedComment || findAssociatedCommentBlock(node, env.comments);
-			jsdocResult = mTypes.parseJSDocComment(docComment);
-		}
+        if (node.extras.jsdocResult) {
+            jsdocResult = node.extras.jsdocResult;
+            docComment = { range : null };
+        } else {
+            docComment = node.extras.associatedComment || findAssociatedCommentBlock(node, env.comments);
+            jsdocResult = mTypes.parseJSDocComment(docComment);
+        }
 
-		// assume that function name that starts with capital is
-		// a constructor
-		var isConstructor;
-		if (name && node.body && isUpperCaseChar(name)) {
-			if (node.extras.cname) {
-				// RHS of assignment
-				name = node.extras.cname;
-			}
-			// create new object so that there is a custom "this"
-			newTypeObj = env.newObject(name, node.range);
-			isConstructor = true;
-		} else {
-			if (jsdocResult.rturn) {
-				var jsdocReturn = mTypes.convertJsDocType(jsdocResult.rturn, env);
-				// keep track of the return type for the way out
-				node.extras.jsdocReturn = jsdocReturn;
-				newTypeObj = jsdocReturn;
-				node.extras.inferredTypeObj = jsdocReturn;
-			} else {
-				// temporarily use "undefined" as type, but this may change once we
-				// walk through to get to a return statement
-				newTypeObj = mTypes.UNDEFINED_TYPE;
-			}
-			isConstructor = false;
-		}
+        // assume that function name that starts with capital is
+        // a constructor
+        var isConstuctor;
+        if (name && node.body && isUpperCaseChar(name)) {
+            if (node.extras.cname) {
+                // RHS of assignment
+                name = node.extras.cname;
+            }
+            // create new object so that there is a custom "this"
+            newTypeName = env.newObject(name, node.range);
+            isConstuctor = true;
+        } else {
+            var jsdocReturn = mTypes.convertJsDocType(jsdocResult.rturn, env);
+            if (jsdocReturn) {
+                // keep track of the return type for the way out
+                node.extras.jsdocReturn = jsdocReturn;
+                newTypeName = jsdocReturn;
+                node.extras.inferredType = jsdocReturn;
+            } else {
+                // temporarily use "undefined" as type, but this may change once we
+                // walk through to get to a return statement
+                newTypeName = "undefined";
+            }
+            isConstuctor = false;
+        }
+        if (!node.body.extras) {
+            node.body.extras = {};
+        }
+        node.body.extras.isConstructor = isConstuctor;
 
-		var callArgs = new Array(params.length);
-		if (node.extras.paramTypeObj && node.extras.paramTypeObj.type === 'FunctionType') {
-			// this function is an anonymous function being passed as an argument
-			// to another function and we have a hint of what the function type is
-			// shunt the argument types to this function's arguments
-			var paramTypes = node.extras.paramTypeObj.params;
-			var len = Math.min(params.length || 0, paramTypes.length || 0);
-			for (var i = 0; i < len; i++) {
-				callArgs[i] = paramTypes[i];
-			}
-		}
-		if (!node.body.extras) {
-			node.body.extras = {};
-		}
-		node.body.extras.isConstructor = isConstructor;
-
-		// add parameters to the current scope
-		var paramTypeObjs = [];
-		if (params.length > 0) {
-			var moduleDefs = findModuleDefinitions(node, env);
-			for (i = 0; i < params.length; i++) {
-				// choose jsdoc tags over module definitions and both of those over call args
-				var jsDocParam = jsdocResult.params[params[i]];
-				var paramTypeObj = null;
-				if (jsDocParam) {
-					paramTypeObj = mTypes.convertJsDocType(jsDocParam, env);
-				} else {
-					paramTypeObj = moduleDefs[i];
-				}
-				if (callArgs[i] && leftTypeIsMoreGeneral(paramTypeObj, callArgs[i], env)) {
-					// unwrap parameter type since name is probably wrong
-					// TODO if param is wrapped in a RestType, then problem
-					paramTypeObj = callArgs[i].type === 'ParameterType' ? callArgs[i].expression : callArgs[i];
-				}
-
-				paramTypeObjs.push(mTypes.createParamType(params[i], paramTypeObj));
-			}
-		}
-
-		var functionTypeObj = mTypes.createFunctionType(paramTypeObjs, newTypeObj, isConstructor);
-		if (isConstructor) {
-			env.createConstructor(name);
-			// assume that constructor will be available from global scope using qualified name
-			// this is not correct in all cases
-			env.addOrSetGlobalVariable(name, functionTypeObj, nameRange, docComment.range);
-		}
-
-		node.extras.inferredTypeObj = functionTypeObj;
-
-		if (name && !isBefore(env.offset, node.range)) {
-			// if we have a name, then add it to the scope
-			env.addVariable(name, node.extras.target, functionTypeObj, nameRange, docComment.range);
-		}
-
-		// now add the scope for inside the function
-		env.newScope();
-		env.addVariable("arguments", node.extras.target, mTypes.createNameType("Arguments"), node.range);
+        // add parameters to the current scope
+        var paramTypeSigs = [], paramSigs = [];
+        if (params.length > 0) {
+            var moduleDefs = findModuleDefinitions(node, env);
+            for (i = 0; i < params.length; i++) {
+                // choose jsdoc tags over module definitions
+                var jsDocParam = jsdocResult.params[params[i]];
+                var typeName = null;
+                if (jsDocParam) {
+                    typeName = mTypes.convertJsDocType(jsDocParam, env);
+                }
+                if (!typeName) {
+                    typeName = moduleDefs[i];
+                }
+                paramTypeSigs.push(typeName);
+                paramSigs.push(params[i] + "/" + typeName);
+            }
+        }
 
 
-		// now determine if we need to add 'this'.  If this function has an appliesTo, the we know it is being assigned as a property onto something else
-		// the 'something else' is the 'this' type.
-		// eg- var obj={};var obj.fun=function() { ... };
-		var appliesTo = node.extras.appliesTo;
-		if (appliesTo) {
-			var appliesToOwner = appliesTo.extras.target;
-			if (appliesToOwner) {
-				var ownerTypeName = env.scope(appliesToOwner);
-				// for the special case of adding to the prototype, we want to make sure that we also add to the 'this' of
-				// the instantiated types
-				if (mTypes.isPrototypeName(ownerTypeName)) {
-					ownerTypeName = mTypes.extractReturnType(ownerTypeName);
-				}
-				env.addVariable("this", node.extras.target, mTypes.createNameType(ownerTypeName), nameRange, docComment.range);
-			}
-		}
+        var functionTypeName = (isConstuctor ? "*" : "?") + newTypeName + ":" + paramSigs.join(",");
+        if (isConstuctor) {
+            env.createConstructor(functionTypeName, newTypeName);
+            // assume that constructor will be available from global scope using qualified name
+            // this is not correct in all cases
+            env.addOrSetGlobalVariable(name, functionTypeName, nameRange, docComment.range);
+        }
 
-		// add variables for all parameters
-		for (i = 0; i < params.length; i++) {
-			env.addVariable(params[i], node.extras.target, paramTypeObjs[i].expression, node.params[i].range);
-		}
-		break;
-	case "VariableDeclarator":
-		if (node.id.name) {
-			// remember that the identifier is an LHS
-			// so, don't create a type for it
-			if (!node.id.extras) {
-				node.id.extras = {};
-			}
-			node.id.extras.isLHS = node.id.extras.isDecl = true;
-			if (node.init && !node.init.extras) {
-				node.init.extras = {};
-			}
-			if (node.init && node.init.type === "FunctionExpression") {
-				// RHS is a function, remember the name in case it is a constructor
-				node.init.extras.fname = node.id.name;
-				node.init.extras.cname = env.getQualifiedName() + node.id.name;
-				node.init.extras.fnameRange = node.id.range;
-			} else {
-				// not the RHS of a function, check for jsdoc comments
-				docComment = findAssociatedCommentBlock(node, env.comments);
-				jsdocResult = mTypes.parseJSDocComment(docComment);
-				jsdocType = jsdocResult.type && mTypes.convertJsDocType(jsdocResult.type, env);
-				node.extras.docRange = docComment.range;
-				if (jsdocType) {
-					node.extras.inferredTypeObj = jsdocType;
-					node.extras.jsdocType = jsdocType;
-					env.addVariable(node.id.name, node.extras.target, jsdocType, node.id.range, docComment.range);
-				}
-			}
-		}
-		env.pushName(node.id.name);
-		break;
-	case "AssignmentExpression":
-		var rightMost = findRightMost(node.left);
-		var qualName = env.getQualifiedName() + findDottedName(node.left);
-		if (rightMost && (rightMost.type === "Identifier" || rightMost.type === "Literal")) {
-			if (!rightMost.extras) {
-				rightMost.extras = {};
-			}
-			if (node.right.type === "FunctionExpression") {
-				// RHS is a function, remember the name in case it is a constructor
-				if (!node.right.extras) {
-					node.right.extras = {};
-				}
-				node.right.extras.appliesTo = rightMost;
-				node.right.extras.fname = rightMost.name;
-				node.right.extras.cname = qualName;
-				node.right.extras.fnameRange = rightMost.range;
+        node.extras.inferredType = functionTypeName;
 
-				if (!node.left.extras) {
-					node.left.extras = {};
-				}
-			}
-			docComment = findAssociatedCommentBlock(node, env.comments);
-			jsdocResult = mTypes.parseJSDocComment(docComment);
-			jsdocType = jsdocResult.type && mTypes.convertJsDocType(jsdocResult.type, env);
-			node.extras.docRange = docComment.range;
-			if (jsdocType) {
-				node.extras.inferredTypeObj = jsdocType;
-				node.extras.jsdocType = jsdocType;
-				env.addVariable(rightMost.name, node.extras.target, jsdocType, rightMost.range, docComment.range);
-			}
-		}
-		env.pushName(qualName);
-		break;
-	case "CatchClause":
-		// create a new scope for the catch parameter
-		node.extras.inferredTypeObj = env.newScope();
-		if (node.param) {
-			if (!node.param.extras) {
-				node.param.extras = {};
-			}
-			var inferredTypeObj = mTypes.createNameType("Error");
-			node.param.extras.inferredTypeObj = inferredTypeObj;
-			env.addVariable(node.param.name, node.extras.target, inferredTypeObj, node.param.range);
-		}
-		break;
-	case "MemberExpression":
-		if (node.property) {
-			if (!node.computed ||  // like this: foo.prop
-				(node.computed && node.property.type === "Literal" && typeof node.property.value === "string")) {  // like this: foo['prop']
+        if (name && !isBefore(env.offset, node.range)) {
+            // if we have a name, then add it to the scope
+            env.addVariable(name, node.extras.target, functionTypeName, nameRange, docComment.range);
+        }
 
-				// keep track of the target of the property expression
-				// so that its type can be used as the seed for finding properties
-				if (!node.property.extras) {
-					node.property.extras = {};
-				}
-				node.property.extras.target = node.object;
-			} else { // like this: foo[prop] or foo[0]
-				// do nothing
-			}
-		}
-		break;
-	case "CallExpression":
-		if (node.callee.name === "define" || node.callee.name === "require") {
-			// check for AMD definition
-			var args = node["arguments"];
-			if (args.length > 1 &&
-				args[args.length-1].type === "FunctionExpression" &&
-				args[args.length-2].type === "ArrayExpression") {
+        // now add the scope for inside the function
+        env.newScope();
+        env.addVariable("arguments", node.extras.target, "Arguments", node.range);
 
-				// assume definition
-				if (!args[args.length-1].extras) {
-					args[args.length-1].extras = {};
-				}
-				args[args.length-1].extras.amdDefn = node;
-			}
-		} else {
-			// the type of the function call may help infer the types of the parameters
-			// keep track of that here
-			rightMost = findRightMost(node.callee);
-			if (rightMost && rightMost.type === "Identifier") {
-				rightMost.extras = rightMost.extras || {};
-				rightMost.extras.callArgs = node["arguments"];
-			}
-		}
-		break;
-	}
 
-	// defer the inferencing of the function's children containing the offset.
-	if (node === env.defer) {
-		node.extras.associatedComment = findAssociatedCommentBlock(node, env.comments);
-		node.extras.inferredTypeObj = node.extras.inferredTypeObj || mTypes.OBJECT_TYPE; // will be filled in later
-		// need to remember the scope to place this function in for later
-		node.extras.scope = env.scope(node.extras.target);
+        // now determine if we need to add 'this'.  If this function has an appliesTo, the we know it is being assigned as a property onto something else
+        // the 'something else' is the 'this' type.
+        // eg- var obj={};var obj.fun=function() { ... };
+        var appliesTo = node.extras.appliesTo;
+        if (appliesTo) {
+            var appliesToOwner = appliesTo.extras.target;
+            if (appliesToOwner) {
+                var ownerTypeName = env.scope(appliesToOwner);
+                // for the special case of adding to the prototype, we want to make sure that we also add to the 'this' of
+                // the instantiated types
+                if (mTypes.isPrototype(ownerTypeName)) {
+                    ownerTypeName = mTypes.extractReturnType(ownerTypeName);
+                }
+                env.addVariable("this", node.extras.target, ownerTypeName, nameRange, docComment.range);
+            }
+        }
 
-		// need to infer the body of this function later
-		node.body.extras.stop = true;
-	}
+        // add variables for all parameters
+        for (i = 0; i < params.length; i++) {
+            env.addVariable(params[i], node.extras.target, paramTypeSigs[i], node.params[i].range);
+        }
+        break;
+    case "VariableDeclarator":
+        if (node.id.name) {
+            // remember that the identifier is an LHS
+            // so, don't create a type for it
+            if (!node.id.extras) {
+                node.id.extras = {};
+            }
+            node.id.extras.isLHS = node.id.extras.isDecl = true;
+            if (node.init && !node.init.extras) {
+                node.init.extras = {};
+            }
+            if (node.init && node.init.type === "FunctionExpression") {
+                // RHS is a function, remember the name in case it is a constructor
+                node.init.extras.fname = node.id.name;
+                node.init.extras.cname = env.getQualifiedName() + node.id.name;
+                node.init.extras.fnameRange = node.id.range;
+            } else {
+                // not the RHS of a function, check for jsdoc comments
+                var docComment = findAssociatedCommentBlock(node, env.comments);
+                jsdocResult = mTypes.parseJSDocComment(docComment);
+                jsdocType = mTypes.convertJsDocType(jsdocResult.type, env);
+                node.extras.docRange = docComment.range;
+                if (jsdocType) {
+                    node.extras.inferredType = jsdocType;
+                    node.extras.jsdocType = jsdocType;
+                    env.addVariable(node.id.name, node.extras.target, jsdocType, node.id.range, docComment.range);
+                }
+            }
+        }
+        env.pushName(node.id.name);
+        break;
+    case "AssignmentExpression":
+        var rightMost = findRightMost(node.left);
+        var qualName = env.getQualifiedName() + findDottedName(node.left);
+        if (rightMost && (rightMost.type === "Identifier" || rightMost.type === "Literal")) {
+            if (!rightMost.extras) {
+                rightMost.extras = {};
+            }
+            if (node.right.type === "FunctionExpression") {
+                // RHS is a function, remember the name in case it is a constructor
+                if (!node.right.extras) {
+                    node.right.extras = {};
+                }
+                node.right.extras.appliesTo = rightMost;
+                node.right.extras.fname = rightMost.name;
+                node.right.extras.cname = qualName;
+                node.right.extras.fnameRange = rightMost.range;
 
-	return true;
+                if (!node.left.extras) {
+                    node.left.extras = {};
+                }
+            }
+            var docComment = findAssociatedCommentBlock(node, env.comments);
+            jsdocResult = mTypes.parseJSDocComment(docComment);
+            jsdocType = mTypes.convertJsDocType(jsdocResult.type, env);
+            node.extras.docRange = docComment.range;
+            if (jsdocType) {
+                node.extras.inferredType = jsdocType;
+                node.extras.jsdocType = jsdocType;
+                env.addVariable(rightMost.name, node.extras.target, jsdocType, rightMost.range, docComment.range);
+            }
+        }
+        env.pushName(qualName);
+        break;
+    case "CatchClause":
+        // create a new scope for the catch parameter
+        node.extras.inferredType = env.newScope();
+        if (node.param) {
+            if (!node.param.extras) {
+                node.param.extras = {};
+            }
+            node.param.extras.inferredType = "Error";
+            env.addVariable(node.param.name, node.extras.target, "Error", node.param.range);
+        }
+        break;
+    case "MemberExpression":
+        if (node.property) {
+            if (!node.computed ||  // like this: foo.at
+                (node.computed && node.property.type === "Literal" && typeof node.property.value === "string")) {  // like this: foo['at']
+
+                // keep track of the target of the property expression
+                // so that its type can be used as the seed for finding properties
+                if (!node.property.extras) {
+                    node.property.extras = {};
+                }
+                node.property.extras.target = node.object;
+            } else { // like this: foo[at] or foo[0]
+                // do nothing
+            }
+        }
+        break;
+    case "CallExpression":
+        if (node.callee.name === "define" || node.callee.name === "require") {
+            // check for AMD definition
+            var args = node["arguments"];
+            if (args.length > 1 &&
+                args[args.length-1].type === "FunctionExpression" &&
+                args[args.length-2].type === "ArrayExpression") {
+
+                // assume definition
+                if (!args[args.length-1].extras) {
+                    args[args.length-1].extras = {};
+                }
+                args[args.length-1].extras.amdDefn = node;
+            }
+        }
+        break;
+    }
+
+    // defer the inferencing of the function's children containing the offset.
+    if (node === env.defer) {
+        node.extras.associatedComment = findAssociatedCommentBlock(node, env.comments);
+        node.extras.inferredType = node.extras.inferredType || "Object"; // will be filled in later
+        // need to remember the scope to place this function in for later
+        node.extras.scope = env.scope(node.extras.target);
+
+        // need to infer the body of this function later
+        node.body.extras.stop = true;
+    }
+
+    return true;
 }
 
 /**
@@ -992,402 +955,371 @@ function inferencer(node, env) {
  * Finishes off the inferencing and adds all proposals
  */
 function inferencerPostOp(node, env) {
-	var type = node.type, name, inferredTypeObj, newTypeObj, rightMost, kvps, i;
+    var type = node.type, name, inferredType, newTypeName, rightMost, kvps, i;
 
-	switch(type) {
-	case "Program":
-		if (env.defer) {
-			// finally, we can infer the deferred target function
+    switch(type) {
+    case "Program":
+        if (env.defer) {
+            // finally, we can infer the deferred target function
 
-			// now use the comments that we deferred until later
-			env.comments = env.deferredComments;
+            // now use the comments that we deferred until later
+            env.comments = env.deferredComments;
 
-			var defer = env.defer;
-			env.defer = null;
-			env.targetTypeName = null;
-			env.pushScope(defer.extras.scope);
-			mVisitor.visit(defer.body, env, inferencer, inferencerPostOp);
-			env.popScope();
-		}
+            var defer = env.defer;
+            env.defer = null;
+            env.targetType = null;
+            env.pushScope(defer.extras.scope);
+            mVisitor.visit(defer.body, env, inferencer, inferencerPostOp);
+            env.popScope();
+        }
 
-		// in case we haven't stored target yet, do so now.
-		env.storeTarget();
+        // in case we haven't stored target yet, do so now.
+        env.storeTarget();
 
-		// TODO FIXADE for historical reasons we end visit by throwing exception.  Should chamge
-		throw env.targetTypeName;
-	case "BlockStatement":
-	case "CatchClause":
-		if (inRange(env.offset, node.range)) {
-			// if we've gotten here and we are still in range, then
-			// we are completing as a top-level entity with no prefix
-			env.storeTarget();
-		}
+        // TODO FIXADE for historical reasons we end visit by throwing exception.  Should chamge
+        throw env.targetType;
+    case "BlockStatement":
+    case "CatchClause":
+        if (inRange(env.offset, node.range)) {
+            // if we've gotten here and we are still in range, then
+            // we are completing as a top-level entity with no prefix
+            env.storeTarget();
+        }
 
-		env.popScope();
-		break;
-	case "MemberExpression":
-		if (afterDot(env.offset, node, env.contents)) {
-			// completion after a dot with no prefix
-			env.storeTarget(env.scope(node.object));
-		}
+        env.popScope();
+        break;
+    case "MemberExpression":
+        if (afterDot(env.offset, node, env.contents)) {
+            // completion after a dot with no prefix
+            env.storeTarget(env.scope(node.object));
+        }
 
-		// for arrays, inferred type is the dereferncing of the array type
-		// for non-arrays inferred type is the type of the property expression
-		if (mTypes.isArrayType(node.object.extras.inferredTypeObj) && node.computed) {
-			// inferred type of expression is the type of the dereferenced array
-			node.extras.inferredTypeObj = mTypes.extractArrayParameterType(node.object.extras.inferredTypeObj);
-		} else if (node.computed && node.property && node.property.type !== "Literal") {
-			// we don't infer parameterized objects, but we have something like this: 'foo[at]'  just assume type is object
-			node.extras.inferredTypeObj = mTypes.OBJECT_TYPE;
-		} else {
-			// a regular member expression: foo.bar or foo['bar']
-			// node.propery will be null for mal-formed asts
-			node.extras.inferredTypeObj = node.property ?
-				node.property.extras.inferredTypeObj :
-				node.object.extras.inferredTypeObj;
-		}
-		break;
-	case "CallExpression":
-		// first check to see if this is a require call
-		var fnTypeObj = extractRequireModule(node, env);
+        // for arrays, inferred type is the dereferncing of the array type
+        // for non-arrays inferred type is the type of the property expression
+        if (mTypes.isArrayType(node.object.extras.inferredType) && node.computed) {
+            // inferred type of expression is the type of the dereferenced array
+            node.extras.inferredType = mTypes.extractArrayParameterType(node.object.extras.inferredType);
+        } else if (node.computed && node.property && node.property.type !== "Literal") {
+            // we don't infer parameterized objects, but we have something like this: 'foo[at]'  just assume type is object
+            node.extras.inferredType = "Object";
+        } else {
+            // a regular member expression: foo.bar or foo['bar']
+            // node.propery will be null for mal-formed asts
+            node.extras.inferredType = node.property ? node.property.extras.inferredType : node.object.extras.inferredType;
+        }
+        break;
+    case "CallExpression":
+        // first check to see if this is a require call
+        var fnType = extractRequireModule(node, env);
 
-		// otherwise, apply the function
-		if (!fnTypeObj) {
-			fnTypeObj = node.callee.extras.inferredTypeObj;
-			fnTypeObj = mTypes.extractReturnType(fnTypeObj);
-		}
-		node.extras.inferredTypeObj = fnTypeObj;
-		break;
-	case "NewExpression":
-		// FIXADE we have a problem here.
-		// constructors that are called like this: new foo.Bar()  should have an inferred type of foo.Bar,
-		// This ensures that another constructor new baz.Bar() doesn't conflict.  However,
-		// we are only taking the final prefix and assuming that it is unique.
-		node.extras.inferredTypeObj = mTypes.extractReturnType(node.callee.extras.inferredTypeObj);
-		break;
-	case "ObjectExpression":
-		// now that we know all the types of the values, use that to populate the types of the keys
-		kvps = node.properties;
-		for (i = 0; i < kvps.length; i++) {
-			if (kvps[i].hasOwnProperty("key")) {
-				// only do this for keys that are identifiers
-				// set the proper inferred type for the key node
-				// and also update the variable
-				name = kvps[i].key.name;
-				if (name) {
-					// now check for the special case where the rhs value is an identifier.
-					// we want to shortcut the navigation and go through to the definition
-					// of the identifier, BUT only do this if the identifier points to a function
-					// and the key and value names match.
-					var range = null;
-					if (name === kvps[i].value.name) {
-						var def = env.lookupTypeObj(kvps[i].value.name, null, true);
-						if (def && def.range && (mTypes.isFunctionOrConstructor(def.typeObj))) {
-							range = def.range;
-						}
-					}
-					if (!range) {
-						range = kvps[i].key.range;
-					}
+        // otherwise, apply the function
+        if (!fnType) {
+            fnType = node.callee.extras.inferredType;
+            fnType = mTypes.extractReturnType(fnType);
+        }
+        node.extras.inferredType = fnType;
+        break;
+    case "NewExpression":
+        // FIXADE we have a problem here.
+        // constructors that are called like this: new foo.Bar()  should have an inferred type of foo.Bar,
+        // This ensures that another constructor new baz.Bar() doesn't conflict.  However,
+        // we are only taking the final prefix and assuming that it is unique.
+        node.extras.inferredType = mTypes.extractReturnType(node.callee.extras.inferredType);
+        break;
+    case "ObjectExpression":
+        // now that we know all the types of the values, use that to populate the types of the keys
+        kvps = node.properties;
+        for (i = 0; i < kvps.length; i++) {
+            if (kvps[i].hasOwnProperty("key")) {
+                // only do this for keys that are identifiers
+                // set the proper inferred type for the key node
+                // and also update the variable
+                name = kvps[i].key.name;
+                if (name) {
+                    // now check for the special case where the rhs value is an identifier.
+                    // we want to shortcut the navigation and go through to the definition
+                    // of the identifier, BUT only do this if the identifier points to a function
+                    // and the key and value names match.
+                    var range = null;
+                    if (name === kvps[i].value.name) {
+                        var def = env.lookupName(kvps[i].value.name, null, false, true);
+                        if (def && def.range && (mTypes.isFunctionOrConstructor(def.typeName))) {
+                            range = def.range;
+                        }
+                    }
+                    if (!range) {
+                        range = kvps[i].key.range;
+                    }
 
-					inferredTypeObj =  kvps[i].key.extras.jsdocType || kvps[i].value.extras.inferredTypeObj;
-					var docComment = kvps[i].key.extras.associatedComment;
-					env.addVariable(name, node, inferredTypeObj, range, docComment.range);
-					if (inRange(env.offset-1, kvps[i].key.range)) {
-						// We found it! rmember for later, but continue to the end of file anyway
-						env.storeTarget(env.scope(node));
-					}
-				}
-			}
-		}
-		if (node.extras.fname) {
-			// this object expression is contained inside another object expression
-			env.popName();
-		}
-		env.popScope();
-		break;
-	case "LogicalExpression":
-	case "BinaryExpression":
-		switch (node.operator) {
-			case '+':
-				// special case: if either side is a string, then result is a string
-				if (node.left.extras.inferredTypeObj.name === "String" ||
-					node.right.extras.inferredTypeObj.name === "String") {
+                    inferredType = kvps[i].value.extras.inferredType;
+                    var docComment = kvps[i].key.extras.associatedComment;
+                    env.addVariable(name, node, inferredType, range, docComment.range);
+                    if (inRange(env.offset-1, kvps[i].key.range)) {
+                        // We found it! rmember for later, but continue to the end of file anyway
+                        env.storeTarget(env.scope(node));
+                    }
+                }
+            }
+        }
+        if (node.extras.fname) {
+            // this object expression is contained inside another object expression
+            env.popName();
+        }
+        env.popScope();
+        break;
+    case "LogicalExpression":
+    case "BinaryExpression":
+        switch (node.operator) {
+            case '+':
+                // special case: if either side is a string, then result is a string
+                if (node.left.extras.inferredType === "String" ||
+                    node.right.extras.inferredType === "String") {
 
-					node.extras.inferredTypeObj = mTypes.STRING_TYPE;
-				} else {
-					node.extras.inferredTypeObj = mTypes.NUMBER_TYPE;
-				}
-				break;
-			case '-':
-			case '/':
-			case '*':
-			case '%':
-			case '&':
-			case '|':
-			case '^':
-			case '<<':
-			case '>>':
-			case '>>>':
-				// Numeric and bitwise operations always return a number
-				node.extras.inferredTypeObj = mTypes.NUMBER_TYPE;
-				break;
-			case '&&':
-			case '||':
-				// will be the type of the left OR the right
-				// for now arbitrarily choose the left
-				node.extras.inferredTypeObj = node.left.extras.inferredTypeObj;
-				break;
+                    node.extras.inferredType = "String";
+                } else {
+                    node.extras.inferredType = "Number";
+                }
+                break;
+            case '-':
+            case '/':
+            case '*':
+            case '%':
+            case '&':
+            case '|':
+            case '^':
+            case '<<':
+            case '>>':
+            case '>>>':
+                // Numeric and bitwise operations always return a number
+                node.extras.inferredType = "Number";
+                break;
+            case '&&':
+            case '||':
+                // will be the type of the left OR the right
+                // for now arbitrarily choose the left
+                node.extras.inferredType = node.left.extras.inferredType;
+                break;
 
-			case '!==':
-			case '!=':
-			case '===':
-			case '==':
-			case '<':
-			case '<=':
-			case '>':
-			case '>=':
-				node.extras.inferredTypeObj = mTypes.BOOLEAN_TYPE;
-				break;
+            case '!==':
+            case '!=':
+            case '===':
+            case '==':
+            case '<':
+            case '<=':
+            case '>':
+            case '>=':
+                node.extras.inferredType = "Boolean";
+                break;
 
 
-			default:
-				node.extras.inferredTypeObj = mTypes.OBJECT_TYPE;
-		}
-		break;
-	case "UpdateExpression":
-	case "UnaryExpression":
-		if (node.operator === '!') {
-			node.extras.inferredTypeObj = mTypes.BOOLEAN_TYPE;
-		} else {
-			// includes all unary operations and update operations
-			// ++ -- - and ~
-			node.extras.inferredTypeObj = mTypes.NUMBER_TYPE;
-		}
-		break;
-	case "FunctionDeclaration":
-	case "FunctionExpression":
-		env.popScope();
-		if (node.body) {
-			var fnameRange;
-			if (node.body.extras.isConstructor) {
-				if (node.id) {
-					fnameRange = node.id.range;
-				} else {
-					fnameRange = node.extras.fnameRange;
-				}
+            default:
+                node.extras.inferredType = "Object";
+        }
+        break;
+    case "UpdateExpression":
+    case "UnaryExpression":
+        if (node.operator === '!') {
+            node.extras.inferredType = "Boolean";
+        } else {
+            // includes all unary operations and update operations
+            // ++ -- - and ~
+            node.extras.inferredType = "Number";
+        }
+        break;
+    case "FunctionDeclaration":
+    case "FunctionExpression":
+        env.popScope();
+        if (node.body) {
+            var fnameRange;
+            if (node.body.extras.isConstructor) {
+                if (node.id) {
+                    fnameRange = node.id.range;
+                } else {
+                    fnameRange = node.extras.fnameRange;
+                }
 
-				// an extra scope was created for the implicit 'this'
-				env.popScope();
+                // an extra scope was created for the implicit 'this'
+                env.popScope();
 
-				// now add a reference to the constructor
-				env.addOrSetVariable(mTypes.extractReturnType(node.extras.inferredTypeObj), node.extras.target, node.extras.inferredTypeObj, fnameRange);
-			} else {
-				// a regular function.  if we don't already know the jsdoc return,
-				// try updating to a more explicit return type
-				if (!node.extras.jsdocReturn) {
-					var returnStatement = findReturn(node.body);
-					var returnType;
-					if (returnStatement && returnStatement.extras && returnStatement.extras.inferredTypeObj) {
-						returnType = returnStatement.extras.inferredTypeObj;
-					} else {
-						returnType = mTypes.UNDEFINED_TYPE;
-					}
-					node.extras.inferredTypeObj = updateReturnType(node.extras.inferredTypeObj, returnType);
-				}
-				// if there is a name, then update that as well
-				var fname;
-				if (node.id) {
-					// true for function declarations
-					fname = node.id.name;
-					fnameRange = node.id.range;
-				} else if (node.extras.appliesTo) {
-					// true for rhs of assignment to function expression
-					fname = node.extras.fname;
-					fnameRange = node.extras.fnameRange;
-				}
-				if (fname) {
-					env.addOrSetVariable(fname, node.extras.target, node.extras.inferredTypeObj, fnameRange);
-				}
-			}
-		}
-		break;
-	case "VariableDeclarator":
-		if (node.init) {
-			inferredTypeObj = node.init.extras.inferredTypeObj;
-		} else {
-			inferredTypeObj = env.newFleetingObject();
-		}
-		node.id.extras.inferredTypeObj = inferredTypeObj;
-		if (!node.extras.jsdocType) {
-			node.extras.inferredTypeObj = inferredTypeObj;
-			env.addVariable(node.id.name, node.extras.target, inferredTypeObj, node.id.range, node.extras.docRange);
-		}
-		if (inRange(env.offset-1, node.id.range)) {
-			// We found it! rmember for later, but continue to the end of file anyway
-			env.storeTarget(env.scope(node.id.extras.target));
-		}
-		env.popName();
-		break;
+                // now add a reference to the constructor
+                env.addOrSetVariable(mTypes.extractReturnType(node.extras.inferredType), node.extras.target, node.extras.inferredType, fnameRange);
+            } else {
+                // a regular function.  if we don't already know the jsdoc return,
+                // try updating to a more explicit return type
+                if (!node.extras.jsdocReturn) {
+                    var returnStatement = findReturn(node.body);
+                    var returnType;
+                    if (returnStatement && returnStatement.extras && returnStatement.extras.inferredType) {
+                        returnType = returnStatement.extras.inferredType;
+                    } else {
+                        returnType = "undefined";
+                    }
+                    node.extras.inferredType = updateReturnType(node.extras.inferredType, returnType);
+                }
+                // if there is a name, then update that as well
+                var fname;
+                if (node.id) {
+                    // true for function declarations
+                    fname = node.id.name;
+                    fnameRange = node.id.range;
+                } else if (node.extras.appliesTo) {
+                    // true for rhs of assignment to function expression
+                    fname = node.extras.fname;
+                    fnameRange = node.extras.fnameRange;
+                }
+                if (fname) {
+                    env.addOrSetVariable(fname, node.extras.target, node.extras.inferredType, fnameRange);
+                }
+            }
+        }
+        break;
+    case "VariableDeclarator":
+        if (node.init) {
+            inferredType = node.init.extras.inferredType;
+        } else {
+            inferredType = env.newFleetingObject();
+        }
+        node.id.extras.inferredType = inferredType;
+        if (!node.extras.jsdocType) {
+            node.extras.inferredType = inferredType;
+            env.addVariable(node.id.name, node.extras.target, inferredType, node.id.range, node.extras.docRange);
+        }
+        if (inRange(env.offset-1, node.id.range)) {
+            // We found it! rmember for later, but continue to the end of file anyway
+            env.storeTarget(env.scope(node.id.extras.target));
+        }
+        env.popName();
+        break;
 
-	case "Property":
-		if (node.key.extras.jsdocType) {
-			// use jsdoc instead of whatever we have inferred
-			node.extras.inferredTypeObj = node.key.extras.jsdocType;
-		} else {
-			node.extras.inferredTypeObj = node.key.extras.inferredTypeObj = node.value.extras.inferredTypeObj;
-		}
-		break;
+    case "Property":
+        node.extras.inferredType = node.key.extras.inferredType = node.value.extras.inferredType;
+        break;
 
-	case "AssignmentExpression":
-		if (node.extras.jsdocType) {
-			// use jsdoc instead of whatever we have inferred
-			inferredTypeObj = node.extras.jsdocType;
-		} else if (node.operator === '=') {
-			// standard assignment
-			inferredTypeObj = node.right.extras.inferredTypeObj;
-		} else {
-			// +=, -=, *=, /=, >>=, <<=, >>>=, &=, |=, or ^=.
-			if (node.operator === '+=' && node.left.extras.inferredTypeObj.name === 'String') {
-				inferredTypeObj = mTypes.STRING_TYPE;
-			} else {
-				inferredTypeObj = mTypes.NUMBER_TYPE;
-			}
-		}
+    case "AssignmentExpression":
+        if (node.extras.jsdocType) {
+            // use jsdoc instead of whatever we have inferred
+            inferredType = node.extras.jsdocType;
+        } else if (node.operator === '=') {
+            // standard assignment
+            inferredType = node.right.extras.inferredType;
+        } else {
+            // +=, -=, *=, /=, >>=, <<=, >>>=, &=, |=, or ^=.
+            if (node.operator === '+=' && node.left.extras.inferredType === 'String') {
+                inferredType = "String";
+            } else {
+                inferredType = "Number";
+            }
+        }
 
-		node.extras.inferredTypeObj = inferredTypeObj;
-		// when we have 'this.that.theOther.f' need to find the right-most identifier
-		rightMost = findRightMost(node.left);
-		if (rightMost && (rightMost.type === "Identifier" || rightMost.type === "Literal")) {
-			name = rightMost.name ? rightMost.name : rightMost.value;
-			rightMost.extras.inferredTypeObj = inferredTypeObj;
-			env.addOrSetVariable(name, rightMost.extras.target, inferredTypeObj, rightMost.range, node.extras.docRange);
-			if (inRange(env.offset-1, rightMost.range)) {
-				// We found it! remember for later, but continue to the end of file anyway
-				env.storeTarget(env.scope(rightMost.extras.target));
-			}
-		} else {
-			// might be an assignment to an array, like:
-			//   foo[at] = bar;
-			if (node.left.computed) {
-				rightMost = findRightMost(node.left.object);
-				if (rightMost && !(rightMost.type === 'Identifier' && rightMost.name === 'prototype')) {
-					// yep...now go and update the type of the array
-					// (also don't turn refs to prototype into an array. this breaks things)
-					var arrayType = mTypes.parameterizeArray(inferredTypeObj);
-					node.left.extras.inferredTypeObj = inferredTypeObj;
-					node.left.object.extras.inferredTypeObj = arrayType;
-					env.addOrSetVariable(rightMost.name, rightMost.extras.target, arrayType, rightMost.range, node.extras.docRange);
-				}
-			}
-		}
-		env.popName();
-		break;
-	case 'Identifier':
-		name = node.name;
-		newTypeObj = env.lookupTypeObj(name, node.extras.target);
-		if (newTypeObj && !node.extras.isDecl) {
-			// name already exists but we are redeclaring it and so not being overridden
-			node.extras.inferredTypeObj = newTypeObj;
-			if (inRange(env.offset, node.range, true)) {
-				// We found it! rmember for later, but continue to the end of file anyway
-				env.storeTarget(env.scope(node.extras.target));
-			}
+        node.extras.inferredType = inferredType;
+        // when we have 'this.that.theOther.f' need to find the right-most identifier
+        rightMost = findRightMost(node.left);
+        if (rightMost && (rightMost.type === "Identifier" || rightMost.type === "Literal")) {
+            name = rightMost.name ? rightMost.name : rightMost.value;
+            rightMost.extras.inferredType = inferredType;
+            env.addOrSetVariable(name, rightMost.extras.target, inferredType, rightMost.range, node.extras.docRange);
+            if (inRange(env.offset-1, rightMost.range)) {
+                // We found it! remember for later, but continue to the end of file anyway
+                env.storeTarget(env.scope(rightMost.extras.target));
+            }
+        } else {
+            // might be an assignment to an array, like:
+            //   foo[at] = bar;
+            if (node.left.computed) {
+                rightMost = findRightMost(node.left.object);
+                if (rightMost && !(rightMost.type === 'Identifier' && rightMost.name === 'prototype')) {
+                    // yep...now go and update the type of the array
+                    // (also don't turn refs to prototype into an array. this breaks things)
+                    var arrayType = mTypes.parameterizeArray(inferredType);
+                    node.left.extras.inferredType = inferredType;
+                    node.left.object.extras.inferredType = arrayType;
+                    env.addOrSetVariable(rightMost.name, rightMost.extras.target, arrayType, rightMost.range, node.extras.docRange);
+                }
+            }
+        }
+        env.popName();
+        break;
+    case 'Identifier':
+        name = node.name;
+        newTypeName = env.lookupName(name, node.extras.target);
+        if (newTypeName && !node.extras.isDecl) {
+            // name already exists but we are redeclaring it and so not being overridden
+            node.extras.inferredType = newTypeName;
+            if (inRange(env.offset, node.range, true)) {
+                // We found it! rmember for later, but continue to the end of file anyway
+                env.storeTarget(env.scope(node.extras.target));
+            }
+        } else if (!node.extras.isLHS) {
+            if (!inRange(env.offset, node.range, true) && !isReserverdWord(name)) {
+                // we have encountered a read of a variable/property that we have never seen before
 
-			// if this identifier refers to a function call, and we know the argument types, then push on to the arg nodes
-			if (node.extras.callArgs) {
-				if (newTypeObj.type === 'FunctionType') {
-					// match param types with args
-					var paramTypes = newTypeObj.params;
-					var args = node.extras.callArgs;
-					var len = Math.min(args.length || 0, paramTypes.length || 0);
-					for (var i = 0; i < len; i++) {
-						args[i].extras = args[i].extras || {};
-						args[i].extras.paramTypeObj = paramTypes[i].type === 'ParameterType' ? paramTypes[i].expression : paramTypes[i];
-					}
-				}
-			}
+                if (node.extras.target) {
+                    // this is a property on an object.  just add to the target
+                    env.addVariable(name, node.extras.target, env.newFleetingObject(), node.range);
+                } else {
+                    // add as a global variable
+                    node.extras.inferredType = env.addOrSetGlobalVariable(name, null, node.range).typeName;
+                }
+            } else {
+                // We found it! rmember for later, but continue to the end of file anyway
+                env.storeTarget(env.scope(node.extras.target));
+            }
+        } else {
+            // if this node is an LHS of an assign, don't store target yet,
+            // we need to first apply the RHS before applying.
+            // This will happen in the enclosing assignment or variable declarator
+        }
+        break;
+    case "ThisExpression":
+        node.extras.inferredType = env.lookupName("this");
+        if (inRange(env.offset-1, node.range)) {
+            // We found it! rmember for later, but continue to the end of file anyway
+            env.storeTarget(env.scope());
+        }
+        break;
+    case "ReturnStatement":
+        if (node.argument) {
+            node.extras.inferredType = node.argument.extras.inferredType;
+        }
+        break;
 
-			if (node.extras.paramTypeObj) {
-				// this identifier is an argument of a function call whose type we know
-				if (leftTypeIsMoreGeneral(newTypeObj, node.extras.paramTypeObj, env)) {
-					// the param type is more specific, use that one instead of the otherwise inferred type
-					node.extras.inferredTypeObj = newTypeObj = node.extras.paramTypeObj;
-					env.addOrSetVariable(name, node.extras.target /* should be null */, newTypeObj);
-				}
-			}
+    case "Literal":
+        if (node.extras.target && typeof node.value === "string") {
+            // we are inside a computed member expression.
+            // find the type of the property referred to if exists
+            name = node.value;
+            newTypeName = env.lookupName(name, node.extras.target);
+            node.extras.inferredType = newTypeName;
+        } else if (node.extras.target && typeof node.value === "number") {
+            // inside of an array access
+            node.extras.inferredType = "Number";
+        } else {
+            var oftype = (typeof node.value);
+            node.extras.inferredType = oftype[0].toUpperCase() + oftype.substring(1, oftype.length);
+        }
+        break;
 
-		} else if (!node.extras.isLHS) {
-			if (!inRange(env.offset, node.range, true) && !isReserverdWord(name)) {
-				// we have encountered a read of a variable/property that we have never seen before
+    case "ConditionalExpression":
+        var target = node.consequent ? node.consequent : node.alternate;
+        if (target) {
+            node.extras.inferredType = target.extras.inferredType;
+        }
+        break;
 
-				if (node.extras.target) {
-					// this is a property on an object.  just add to the target
-					env.addVariable(name, node.extras.target, env.newFleetingObject(), node.range);
-				} else {
-					// add as a global variable
-					node.extras.inferredTypeObj = env.addOrSetGlobalVariable(name, null, node.range).typeObj;
-				}
-			} else {
-				// We found it! rmember for later, but continue to the end of file anyway
-				env.storeTarget(env.scope(node.extras.target));
-			}
-		} else {
-			// if this node is an LHS of an assign, don't store target yet,
-			// we need to first apply the RHS before applying.
-			// This will happen in the enclosing assignment or variable declarator
-		}
-		break;
-	case "ThisExpression":
-		node.extras.inferredTypeObj = env.lookupTypeObj("this");
-		if (inRange(env.offset-1, node.range)) {
-			// We found it! rmember for later, but continue to the end of file anyway
-			env.storeTarget(env.scope());
-		}
-		break;
-	case "ReturnStatement":
-		if (node.argument) {
-			node.extras.inferredTypeObj = node.argument.extras.inferredTypeObj;
-		}
-		break;
+    case "ArrayExpression":
+        // parameterize this array by the type of its first non-null element
+        if (node.elements) {
+            for (i = 0; i < node.elements.length; i++) {
+                if (node.elements[i]) {
+                    node.extras.inferredType = mTypes.parameterizeArray(node.elements[i].extras.inferredType);
+                }
+            }
+        }
+    }
 
-	case "Literal":
-		if (node.extras.target && typeof node.value === "string") {
-			// we are inside a computed member expression.
-			// find the type of the property referred to if exists
-			name = node.value;
-			newTypeObj = env.lookupTypeObj(name, node.extras.target);
-			node.extras.inferredTypeObj = newTypeObj;
-		} else if (node.extras.target && typeof node.value === "number") {
-			// inside of an array access
-			node.extras.inferredTypeObj = mTypes.NUMBER_TYPE;
-		} else {
-			var oftype = (typeof node.value);
-			node.extras.inferredTypeObj = mTypes.createNameType(oftype[0].toUpperCase() + oftype.substring(1, oftype.length));
-		}
-		break;
-
-	case "ConditionalExpression":
-		var target = node.consequent ? node.consequent : node.alternate;
-		if (target) {
-			node.extras.inferredTypeObj = target.extras.inferredTypeObj;
-		}
-		break;
-
-	case "ArrayExpression":
-		// parameterize this array by the type of its first non-null element
-		if (node.elements) {
-			for (i = 0; i < node.elements.length; i++) {
-				if (node.elements[i]) {
-					node.extras.inferredTypeObj = mTypes.parameterizeArray(node.elements[i].extras.inferredTypeObj);
-				}
-			}
-		}
-	}
-
-	if (!node.extras.inferredTypeObj) {
-		node.extras.inferredTypeObj = mTypes.OBJECT_TYPE;
-	}
+    if (!node.extras.inferredType) {
+        node.extras.inferredType = "Object";
+    }
 }
 
 
@@ -1395,57 +1327,57 @@ function inferencerPostOp(node, env) {
  * add variable names from inside a lint global directive
  */
 function addLintGlobals(env, lintOptions) {
-	var i, globName;
-	if (lintOptions && isArray(lintOptions.global)) {
-		for (i = 0; i < lintOptions.global.length; i++) {
-			globName = lintOptions.global[i];
-			if (!env.lookupTypeObj(globName)) {
-				env.addOrSetVariable(globName);
-			}
-		}
-	}
-	var comments = env.comments;
-	if (comments) {
-		for (i = 0; i < comments.length; i++) {
-			var range = comments[i].range;
-			if (comments[i].type === "Block" && comments[i].value.substring(0, "global".length) === "global") {
-				var globals = comments[i].value;
-				var splits = globals.split(/\s+/);
-				// start with 1 to avoid 'global'
-				for (var j = 1; j < splits.length; j++) {
-					if (splits[j].length > 0) {
-						var colonIdx = splits[j].indexOf(':');
-						if (colonIdx >= 0) {
-							globName = splits[j].substring(0,colonIdx).trim();
-						} else {
-							globName = splits[j].trim();
-						}
-						if (!env.lookupTypeObj(globName)) {
-							env.addOrSetVariable(globName, null, null, range);
-						}
-					}
-				}
-				break;
-			}
-		}
-	}
+    var i, globName;
+    if (lintOptions && isArray(lintOptions.global)) {
+        for (i = 0; i < lintOptions.global.length; i++) {
+            globName = lintOptions.global[i];
+            if (!env.lookupName(globName)) {
+                env.addOrSetVariable(globName);
+            }
+        }
+    }
+    var comments = env.comments;
+    if (comments) {
+        for (i = 0; i < comments.length; i++) {
+            var range = comments[i].range;
+            if (comments[i].type === "Block" && comments[i].value.substring(0, "global".length) === "global") {
+                var globals = comments[i].value;
+                var splits = globals.split(/\s+/);
+                // start with 1 to avoid 'global'
+                for (var j = 1; j < splits.length; j++) {
+                    if (splits[j].length > 0) {
+                        var colonIdx = splits[j].indexOf(':');
+                        if (colonIdx >= 0) {
+                            globName = splits[j].substring(0,colonIdx).trim();
+                        } else {
+                            globName = splits[j].trim();
+                        }
+                        if (!env.lookupName(globName)) {
+                            env.addOrSetVariable(globName, null, null, range);
+                        }
+                    }
+                }
+                break;
+            }
+        }
+    }
 }
 
 /**
  * Adds global variables defined in dependencies
  */
 function addIndexedGlobals(env) {
-	// no indexer means that we should not consult indexes for extra type information
-	if (env.indexer) {
-		// get the list of summaries relevant for this file
-		// add it to the global scope
-		var summaries = env.indexer.retrieveGlobalSummaries();
-		for (var fileName in summaries) {
-			if (summaries.hasOwnProperty(fileName)) {
-				env.mergeSummary(summaries[fileName], env.globalTypeName());
-			}
-		}
-	}
+    // no indexer means that we should not consult indexes for extra type information
+    if (env.indexer) {
+        // get the list of summaries relevant for this file
+        // add it to the global scope
+        var summaries = env.indexer.retrieveGlobalSummaries();
+        for (var fileName in summaries) {
+            if (summaries.hasOwnProperty(fileName)) {
+                env.mergeSummary(summaries[fileName], env.globalTypeName());
+            }
+        }
+    }
 }
 
 /**
@@ -1453,41 +1385,8 @@ function addIndexedGlobals(env) {
  * must explicitly remove it
  */
 function removePrefix(prefix, string) {
-	return string.substring(prefix.length);
+    return string.substring(prefix.length);
 }
-
-function isEmpty(generatedTypeName, allTypes) {
-	if (typeof generatedTypeName !== 'string') {
-		// original type was not a name expression
-		return false;
-	} else if (generatedTypeName === "Object" || generatedTypeName === "undefined") {
-		return true;
-	} else if (generatedTypeName.substring(0, mTypes.GEN_NAME.length) !== mTypes.GEN_NAME) {
-		// not a synthetic type, so not empty
-		return false;
-	}
-
-
-	// now check to see if there are any non-default fields in this type
-	var type = allTypes[generatedTypeName];
-	var popCount = 0;
-	// type should have a $$proto only and nothing else if it is empty
-	for (var property in type) {
-		if (type.hasOwnProperty(property)) {
-			popCount++;
-			if (popCount > 1) {
-				break;
-			}
-		}
-	}
-	if (popCount === 1) {
-		// we have an empty object literal, must check parent
-		// must traverse prototype hierarchy to make sure empty
-		return isEmpty(type.$$proto.typeObj.name, allTypes);
-	}
-	return false;
-}
-
 
 /**
  * Determines if the left type name is more general than the right type name.
@@ -1498,49 +1397,67 @@ function isEmpty(generatedTypeName, allTypes) {
  * added to it.  Additionally, the type specified in the $$proto property is
  * either empty or is Object
  *
- * @param {{}} leftTypeObj
- * @param {{}} rightTypeObj
+ * @param String leftTypeName
+ * @param String rightTypeName
  * @param {{getAllTypes:function():Object}} env
  *
  * @return Boolean
  */
-function leftTypeIsMoreGeneral(leftTypeObj, rightTypeObj, env) {
-	var leftTypeName = leftTypeObj.name || mTypes.convertToSimpleTypeName(leftTypeObj),
-		rightTypeName = rightTypeObj.name || mTypes.convertToSimpleTypeName(rightTypeObj);
+function leftTypeIsMoreGeneral(leftTypeName, rightTypeName, env) {
+    function isEmpty(generatedTypeName) {
+        if (generatedTypeName === "Object" || generatedTypeName === "undefined") {
+            return true;
+        } else if (leftTypeName.substring(0, mTypes.GEN_NAME.length) !== mTypes.GEN_NAME) {
+            return false;
+        }
 
-	if (!leftTypeName) {
-		if (leftTypeObj.type === 'NullLiteral' || leftTypeObj.type === 'UndefinedLiteral' || leftTypeObj.type === 'VoidLiteral') {
-			leftTypeName = 'undefined';
-		}
-	}
 
-	function convertToNumber(typeName) {
-		if (typeName === "undefined") {
-			return 0;
-		} else if (typeName === "Object") {
-			return 1;
-		} else if (isEmpty(typeName, env.getAllTypes())) {
-			return 2;
-		} else {
-			return 3;
-		}
-	}
+        var type = env.getAllTypes()[generatedTypeName];
+        var popCount = 0;
+        // type should have a $$proto only and nothing else if it is empty
+        for (var property in type) {
+            if (type.hasOwnProperty(property)) {
+                popCount++;
+                if (popCount > 1) {
+                    break;
+                }
+            }
+        }
+        if (popCount === 1) {
+            // we have an empty object literal, must check parent
+            // must traverse prototype hierarchy to make sure empty
+            return isEmpty(type.$$proto.typeName);
+        }
+        return false;
+    }
 
-	if (!rightTypeName) {
-		return false;
-	}
+    function convertToNumber(typeName) {
+        if (typeName === "undefined") {
+            return 0;
+        } else if (typeName === "Object") {
+            return 1;
+        } else if (isEmpty(typeName)) {
+            return 2;
+        } else {
+            return 3;
+        }
+    }
 
-	var leftNum = convertToNumber(leftTypeName);
-	// avoid calculating the rightNum if possible
-	if (leftNum === 0) {
-		return rightTypeName !== "undefined";
-	} else if (leftNum === 1) {
-		return rightTypeName !== "undefined" && rightTypeName !== "Object";
-	} else if (leftNum === 2) {
-		return rightTypeName !== "undefined" && rightTypeName !== "Object" && !isEmpty(rightTypeName, env.getAllTypes());
-	} else {
-		return false;
-	}
+    if (!rightTypeName) {
+        return false;
+    }
+
+    var leftNum = convertToNumber(leftTypeName);
+    // avoid calculating the rightNum if possible
+    if (leftNum === 0) {
+        return rightTypeName !== "undefined";
+    } else if (leftNum === 1) {
+        return rightTypeName !== "undefined" && rightTypeName !== "Object";
+    } else if (leftNum === 2) {
+        return rightTypeName !== "undefined" && rightTypeName !== "Object" && !isEmpty(rightTypeName);
+    } else {
+        return false;
+    }
 }
 
 /**
@@ -1548,908 +1465,725 @@ function leftTypeIsMoreGeneral(leftTypeObj, rightTypeObj, env) {
  * prop.  prop must not be coming from Object
  */
 function typeContainsProperty(type, prop) {
-	if (! (prop in type)) {
-		return false;
-	}
-	if (Object.hasOwnProperty(prop)) {
-		// the propery may be re-defined in the current type
-		// check that here
-		return !type.hasOwnProperty(prop);
-	}
-	if (Object.prototype.hasOwnProperty(prop)) {
-		// this is one of the synthetic properties like __defineGetter__
-		// should be ignored, unless already exists in property
-		return type.hasOwnProperty(prop);
-	}
-	return true;
+    if (! (prop in type)) {
+        return false;
+    }
+    if (Object.hasOwnProperty(prop)) {
+        // the propery may be re-defined in the current type
+        // check that here
+        return !type.hasOwnProperty(prop);
+    }
+    return true;
 }
 
 /**
  * Creates the environment object that stores type information
  * Called differently depending on what job this content assistant is being called to do.
- * TODO move to own module?
  */
 function createEnvironment(options) {
-	var buffer = options.buffer, uid = options.uid, offset = options.offset, indexer = options.indexer, globalObjName = options.globalObjName;
-	if (!offset) {
-		offset = buffer.length+1;
-	}
+    var buffer = options.buffer, uid = options.uid, offset = options.offset, indexer = options.indexer, globalObjName = options.globalObjName;
+    if (!offset) {
+        offset = buffer.length+1;
+    }
 
-	// must copy comments because the array is mutable
-	var comments = [];
-	if (options.comments) {
-		for (var i = 0; i < options.comments.length; i++) {
-			comments[i] = options.comments[i];
-		}
-	}
+    // must copy comments because the array is mutable
+    var comments = [];
+    if (options.comments) {
+        for (var i = 0; i < options.comments.length; i++) {
+            comments[i] = options.comments[i];
+        }
+    }
 
+    // prefix for generating local types
+    // need to add a unique id for each file so that types defined in dependencies don't clash with types
+    // defined locally
+    var namePrefix = mTypes.GEN_NAME + uid + "~";
 
-	// create a hash of the path using a hashcode calculation similar to java's String.hashCode() method
-	var hashCode = function(str) {
-		var hash = 0, c, i;
-		if (str.length === 0) {
-			return hash;
-		}
-		for (i = 0; i < str.length; i++) {
-			c = str.charCodeAt(i);
-			hash = ((hash << 5) - hash) + c;
-			hash = hash & hash; // Convert to 32bit integer
-		}
-		return hash;
-	};
+    return {
+        /** Each element is the type of the current scope, which is a key into the types array */
+        _scopeStack : [globalObjName],
+        /**
+         * a map of all the types and their properties currently known
+         * when an indexer exists, local storage will be checked for extra type information
+         */
+        _allTypes : new mTypes.Types(globalObjName),
+        /** a counter used for creating unique names for object literals and scopes */
+        _typeCount : 0,
 
-	// prefix for generating local types
-	// need to add a unique id for each file so that types defined in dependencies don't clash with types
-	// defined locally
-	var namePrefix = mTypes.GEN_NAME + hashCode(uid) + "~";
-	// uncomment to show names
-//		var namePrefix = mTypes.GEN_NAME + (uid) + "~";
+        _nameStack : [],
 
-	return {
-		/** Each element is the type of the current scope, which is a key into the types array */
-		_scopeStack : [globalObjName],
-		/**
-		 * a map of all the types and their properties currently known
-		 * when an indexer exists, local storage will be checked for extra type information
-		 */
-		_allTypes : new mTypes.Types(globalObjName),
-		/** a counter used for creating unique names for object literals and scopes */
-		_typeCount : 0,
+        /** if this is an AMD module, then the value of this property is the 'define' call expression */
+        amdModule : null,
+        /** if this is a wrapped commonjs module, then the value of this property is the 'define' call expression */
+        commonjsModule : null,
+        /** the indexer for thie content assist invocation.  Used to track down dependencies */
+        indexer: indexer,
+        /** the offset of content assist invocation */
+        offset : offset,
+        /** the entire contents being completed on */
+        contents : buffer,
+        uid : uid === 'local' ? null : uid,
 
-		_nameStack : [],
+        /** List of comments in the AST*/
+        comments : comments,
 
-		/** if this is an AMD module, then the value of this property is the 'define' call expression */
-		amdModule : null,
-		/** if this is a wrapped commonjs module, then the value of this property is the 'define' call expression */
-		commonjsModule : null,
-		/** the indexer for thie content assist invocation.  Used to track down dependencies */
-		indexer: indexer,
-		/** the offset of content assist invocation */
-		offset : offset,
-		/** the entire contents being completed on */
-		contents : buffer,
-		uid : uid === 'local' ? null : uid, // make the uid shorter
+        newName: function() {
+            return namePrefix + this._typeCount++;
+        },
+        /**
+         * Creates a new empty scope and returns the name of the scope
+         * must call this.popScope() when finished with this scope
+         */
+        newScope: function(range) {
+            // the prototype is always the currently top level scope
+            var targetType = this.scope();
+            var newScopeName = this.newName();
+            this._allTypes[newScopeName] = {
+                $$proto : new mTypes.Definition(targetType, range, this.uid)
+            };
+            this._scopeStack.push(newScopeName);
+            return newScopeName;
+        },
 
-		/** List of comments in the AST*/
-		comments : comments,
+        pushScope : function(scopeName) {
+            this._scopeStack.push(scopeName);
+        },
 
-		newName: function() {
-			return namePrefix + this._typeCount++;
-		},
+        pushName : function(name) {
+            this._nameStack.push(name);
+        },
 
-		/**
-		 * @return {boolean} true iff this is an internally generated name
-		 */
-		isSyntheticName: function(name) {
-			return name.substr(0, mTypes.GEN_NAME.length) === mTypes.GEN_NAME;
-		},
+        popName : function() {
+            this._nameStack.pop();
+        },
 
-		/**
-		 * Creates a new empty scope and returns the name of the scope
-		 * must call this.popScope() when finished with this scope
-		 */
-		newScope: function(range) {
-			// the prototype is always the currently top level scope
-			var targetType = this.scope();
-			var newScopeName = this.newName();
-			this._allTypes[newScopeName] = {
-				$$proto : new mTypes.Definition(targetType, range, this.uid)
-			};
-			this._scopeStack.push(newScopeName);
-			return newScopeName;
-		},
+        getQualifiedName : function() {
+            var name = this._nameStack.join('.');
+            return name.length > 0 ? name + '.' : name;
+        },
 
-		newScopeObj : function(range) {
-			return mTypes.createNameType(this.newScope(range));
-		},
+        /**
+         * Creates a new empty object scope and returns the name of this object
+         * must call this.popScope() when finished
+         */
+        newObject: function(newObjectName, range) {
+            // object needs its own scope
+            this.newScope();
+            // if no name passed in, create a new one
+            newObjectName = newObjectName? newObjectName : this.newName();
+            // assume that objects have their own "this" object
+            // prototype of Object
+            this._allTypes[newObjectName] = {
+                $$proto : new mTypes.Definition("Object", range, this.uid)
+            };
+            this.addVariable("this", null, newObjectName, range);
 
-		pushScope : function(scopeName) {
-			this._scopeStack.push(scopeName);
-		},
+            return newObjectName;
+        },
 
-		pushName : function(name) {
-			this._nameStack.push(name);
-		},
+        /**
+         * like a call to this.newObject(), but the
+         * object created has not scope added to the scope stack
+         */
+        newFleetingObject : function(name, range) {
+            var newObjectName = name ? name : this.newName();
+            this._allTypes[newObjectName] = {
+                $$proto : new mTypes.Definition("Object", range, this.uid)
+            };
+            return newObjectName;
+        },
 
-		popName : function() {
-			this._nameStack.pop();
-		},
+        /** removes the current scope */
+        popScope: function() {
+            // Can't delete old scope since it may have been assigned somewhere
+            var oldScope = this._scopeStack.pop();
+            return oldScope;
+        },
 
-		getQualifiedName : function() {
-			var name = this._nameStack.join('.');
-			return name.length > 0 ? name + '.' : name;
-		},
+        /**
+         * @param {ASTNode|String} target
+         * returns the type name for the current scope
+         * if a target is passed in (optional), then use the
+         * inferred type of the target instead (if it exists)
+         */
+        scope : function(target) {
+            if (typeof target === "string") {
+                return target;
+            }
 
-		/**
-		 * Creates a new empty object scope and returns the name of this object
-		 * must call this.popScope() when finished
-		 * @return {{type:String,name:String}} type object that was just created
-		 */
-		newObject : function(newObjectName, range) {
-			// object needs its own scope
-			this.newScope();
-			// if no name passed in, create a new one
-			newObjectName = newObjectName? newObjectName : this.newName();
-			// assume that objects have their own "this" object
-			// prototype of Object
-			this._allTypes[newObjectName] = {
-				$$proto : new mTypes.Definition("Object", range, this.uid)
-			};
-			var typeObj = mTypes.createNameType(newObjectName);
-			this.addVariable("this", null, typeObj, range);
+            if (target && target.extras.inferredType) {
+                // check for function literal
+                var inferredType = target.extras.inferredType;
+                // hmmmm... will be a problem here if there are nested ~protos
+                if (mTypes.isFunctionOrConstructor(inferredType) && !mTypes.isPrototype(inferredType)) {
+                    var noArgsType = mTypes.removeParameters(inferredType);
+                    if (this._allTypes[noArgsType]) {
+                        return noArgsType;
+                    } else {
+                        return "Function";
+                    }
+                } else if (mTypes.isArrayType(inferredType)) {
+                    // TODO FIXADE we are losing parameterization here
+                    return "Array";
+                } else {
+                    return inferredType;
+                }
+            } else {
+                // grab topmost scope
+                return this._scopeStack[this._scopeStack.length -1];
+            }
+        },
 
-			return typeObj;
-		},
+        globalScope : function() {
+            return this._allTypes[this._scopeStack[0]];
+        },
 
-		/**
-		 * like a call to this.newObject(), but the
-		 * object created has not scope added to the scope stack
-		 */
-		newFleetingObject : function(name, range) {
-			var newObjectName = name ? name : this.newName();
-			this._allTypes[newObjectName] = {
-				$$proto : new mTypes.Definition("Object", range, this.uid)
-			};
-			return mTypes.createNameType(newObjectName);
-		},
+        globalTypeName : function() {
+            return this._scopeStack[0];
+        },
 
-		/**
-		 * like a call to this.newObject(), but the
-		 * object created has not scope added to the scope stack
-		 * @return String the constructor name generated
-		 */
-		con: function(name, range) {
-			var newObjectName = name ? name : this.newName();
-			this._allTypes[newObjectName] = {
-				$$proto : new mTypes.Definition("Object", range, this.uid)
-			};
-			return newObjectName;
-		},
+        /**
+         * adds the name to the target type.
+         * if target is passed in then use the type corresponding to
+         * the target, otherwise use the current scope
+         *
+         * Will not override an existing variable if the new typeName is "Object" or "undefined"
+         * Will not add to a built in type
+         *
+         * @param {String} name
+         * @param {String} typeName
+         * @param {Object} target
+         * @param {Array.<Number>} range
+         * @param {Array.<Number>} docRange
+         */
+        addVariable : function(name, target, typeName, range, docRange) {
+            if (this._allTypes.Object["$_$" + name]) {
+                // this is a built in property of object.  do not redefine
+                return;
+            }
+            var type = this._allTypes[this.scope(target)];
+            // do not allow augmenting built in types
+            if (!type.$$isBuiltin) {
+                // if new type name is not more general than old type, do not replace
+                if (typeContainsProperty(type, name) && leftTypeIsMoreGeneral(typeName, type[name].typeName, this)) {
+                    // do nuthin
+                } else {
+                    type[name] = new mTypes.Definition(typeName ? typeName : "Object", range, this.uid);
+                    type[name].docRange = docRange;
+                    return type[name];
+                }
+            }
+        },
 
-		/** removes the current scope */
-		popScope: function() {
-			// Can't delete old scope since it may have been assigned somewhere
-			var oldScope = this._scopeStack.pop();
-			return oldScope;
-		},
+        addOrSetGlobalVariable : function(name, typeName, range, docRange) {
+            if (this._allTypes.Object["$_$" + name]) {
+                // this is a built in property of object.  do not redefine
+                return;
+            }
+            return this.addOrSetVariable(name,
+                // mock an ast node with a global type
+                { extras : { inferredType : this.globalTypeName() } }, typeName, range, docRange);
+        },
 
-		/**
-		 * @param {ASTNode|String} target
-		 * @return {{}} the type object for the current scope
-		 * if a target is passed in (optional), then use the
-		 * inferred type of the target instead (if it exists)
-		 */
-		scope : function(target) {
-			if (typeof target === "string") {
-				return target;
-			} else if (target && target.extras.inferredTypeObj) {
-				var inferredTypeObj = target.extras.inferredTypeObj;
-				// TODO what happens if not a NameExpression or FunctionType???
-				if (inferredTypeObj.type === 'NameExpression') {
-					return inferredTypeObj.name;
-				} else if (inferredTypeObj.type === 'FunctionType') {
-					if (inferredTypeObj.params) {
-						for (var i = 0; i < inferredTypeObj.params.length; i++) {
-							if ((inferredTypeObj.params[i].name === 'new' ||
-								inferredTypeObj.params[i].name === 'this') &&
-								inferredTypeObj.params[i].expression.name) {
+        /**
+         * like add variable, but first checks the prototype hierarchy
+         * if exists in prototype hierarchy, then replace the type
+         *
+         * Will not override an existing variable if the new typeName is "Object" or "undefined"
+         */
+        addOrSetVariable : function(name, target, typeName, range, docRange) {
+            if (name === 'prototype') {
+                name = '$$proto';
+            } else if (this._allTypes.Object["$_$" + name]) {
+                // this is a built in property of object.  do not redefine
+                return;
+            }
 
-								return inferredTypeObj.params[i].expression.name;
-							}
-						}
-					}
-					return "Function";
-				} else if (inferredTypeObj.type === 'ArrayType') {
-					return "Array";
-				}
-			} else {
-				// grab topmost scope
-				return this._scopeStack[this._scopeStack.length -1];
-			}
-		},
+            var targetType = this.scope(target);
+            var current = this._allTypes[targetType], found = false;
+            // if no type provided, create a new type
+            typeName = typeName ? typeName : this.newFleetingObject();
+            var defn;
+            while (current) {
+                if (typeContainsProperty(current, name)) {
+                    defn = current[name];
+                    // found it, just overwrite
+                    // do not allow overwriting of built in types
+                    // 3 cases to avoid:
+                    //  1. properties of builtin types cannot be set
+                    //  2. builtin types cannot be redefined
+                    //  3. new type name is more general than old type
+                    if (!current.$$isBuiltin && current.hasOwnProperty(name) &&
+                            !leftTypeIsMoreGeneral(typeName, defn.typeName, this)) {
+                        // since we are just overwriting the type we do not want to change
+                        // the path or the range
+                        defn.typeName = typeName;
+                        if (docRange) {
+                            defn.docRange = docRange;
+                        }
+                    }
+                    found = true;
+                    break;
+                } else if (current.$$proto) {
+                    current = this._allTypes[current.$$proto.typeName];
+                } else {
+                    current = null;
+                }
+            }
 
-		globalScope : function() {
-			return this._allTypes[this._scopeStack[0]];
-		},
+            if (!found) {
+                // not found, so just add to current scope
+                // do not allow overwriting of built in types
+                var type = this._allTypes[targetType];
+                if (!type.$$isBuiltin) {
+                    defn = new mTypes.Definition(typeName, range, this.uid);
+                    defn.docRange = docRange;
+                    type[name] = defn;
+                }
+            }
+            return defn;
+        },
 
-		globalTypeName : function() {
-			return this._scopeStack[0];
-		},
+        /** looks up the name in the hierarchy */
+        lookupName : function(name, target, applyFunction, includeDefinition) {
 
-		/**
-		 * adds the name to the target type.
-		 * if target is passed in then use the type corresponding to
-		 * the target, otherwise use the current scope
-		 *
-		 * Will not override an existing variable if the new typeName is "Object" or "undefined"
-		 * Will not add to a built in type
-		 *
-		 * @param {String} name
-		 * @param {{}} typeObj
-		 * @param {Object} target
-		 * @param {Array.<Number>} range
-		 * @param {Array.<Number>} docRange
-		 */
-		addVariable : function(name, target, typeObj, range, docRange) {
-			if (name === 'prototype' || name === '__proto__') {
-				name = '$$proto';
-			} else if (this._allTypes.Object["$_$" + name]) {
-				// this is a built in property of object.  do not redefine
-				return;
-			}
-			var type = this._allTypes[this.scope(target)];
-			// do not allow augmenting built in types
-			if (type && !type.$$isBuiltin) {
-				// if new type name is not more general than old type, do not replace
-				if (typeContainsProperty(type, name) && leftTypeIsMoreGeneral(typeObj, type[name].typeObj, this)) {
-					// do nuthin
-				} else {
-					type[name] = new mTypes.Definition(typeObj ? typeObj : mTypes.OBJECT_TYPE, range, this.uid);
-					type[name].docRange = docRange;
-					return type[name];
-				}
-			}
-		},
+            // translate function names on object into safe names
+            var swapper = function(name) {
+                switch (name) {
+                    case "prototype":
+                        return "$$proto";
+                    case "toString":
+                    case "hasOwnProperty":
+                    case "toLocaleString":
+                    case "valueOf":
+                    case "isProtoTypeOf":
+                    case "propertyIsEnumerable":
+                        return "$_$" + name;
+                    default:
+                        return name;
+                }
+            };
 
-		addOrSetGlobalVariable : function(name, typeObj, range, docRange) {
-			if (this._allTypes.Object["$_$" + name]) {
-				// this is a built in property of object.  do not redefine
-				return;
-			}
-			return this.addOrSetVariable(name,
-				// mock an ast node with a global type
-				this.globalTypeName(), typeObj, range, docRange);
-		},
+            var innerLookup = function(name, type, allTypes) {
+                var res = type[name];
 
-		/**
-		 * like add variable, but first checks the prototype hierarchy
-		 * if exists in prototype hierarchy, then replace the type
-		 *
-		 * Will not override an existing variable if the new typeName is "Object" or "undefined"
-		 */
-		addOrSetVariable : function(name, target, typeObj, range, docRange) {
-			if (name === 'prototype' || name === '__proto__') {
-				name = '$$proto';
-			} else if (this._allTypes.Object["$_$" + name]) {
-				// this is a built in property of object.  do not redefine
-				return;
-			}
+                var proto = type.$$proto;
+                if (res) {
+                    return includeDefinition ? res : res.typeName;
+                } else if (proto) {
+                    return innerLookup(name, allTypes[proto.typeName], allTypes);
+                } else {
+                    return null;
+                }
+            };
+            var targetType = this._allTypes[this.scope(target)];
 
-			var targetTypeName = this.scope(target);
-			var current = this._allTypes[targetTypeName], found = false;
-			// if no type provided, create a new type
-			typeObj = typeObj ? typeObj : this.newFleetingObject();
-			var defn;
-			while (current) {
-				if (typeContainsProperty(current, name)) {
-					defn = current[name];
-					// found it, just overwrite
-					// do not allow overwriting of built in types
-					// 3 cases to avoid:
-					//  1. properties of builtin types cannot be set
-					//  2. builtin types cannot be redefined
-					//  3. new type name is more general than old type
-					if (!current.$$isBuiltin && current.hasOwnProperty(name) &&
-							!leftTypeIsMoreGeneral(typeObj, defn.typeObj, this)) {
-						// since we are just overwriting the type we do not want to change
-						// the path or the range
-						defn.typeObj = typeObj;
-						if (docRange) {
-							defn.docRange = docRange;
-						}
-					}
-					found = true;
-					break;
-				} else if (current.$$proto) {
-					var tname = current.$$proto.typeObj.name;
-					current = this._allTypes[tname || "Function"];
-				} else {
-					current = null;
-				}
-			}
+            // uncomment this if we want to hide errors where there is an unknown type being placed on the scope stack
+//              if (!targetType) {
+//                  targetType = this.globalScope()
+//              }
+            var res = innerLookup(swapper(name), targetType, this._allTypes);
+            return res;
+        },
 
-			if (!found) {
-				// not found, so just add to current scope
-				// do not allow overwriting of built in types
-				var type = this._allTypes[targetTypeName];
-				if (!type.$$isBuiltin) {
-					defn = new mTypes.Definition(typeObj, range, this.uid);
-					defn.docRange = docRange;
-					type[name] = defn;
-				}
-			}
-			return defn;
-		},
+        /** removes the variable from the current type */
+        removeVariable : function(name, target) {
+            // do not allow deleting properties of built in types
+            var type = this._allTypes[this.scope(target)];
+            // 2 cases to avoid:
+            //  1. properties of builtin types cannot be deleted
+            //  2. builtin types cannot be deleted from global scope
+            if (!type.$$isBuiltin && type[name] && !(type[name] && !type.hasOwnProperty(name))) {
+                delete type[name];
+            }
+        },
 
-		/**
-		 * looks up the name in the hierarchy
-		 * @return {{}} type objec for the current name or null if doesn't exist
-		 */
-		lookupTypeObj : function(name, target, includeDefinition) {
+        /**
+         * adds a file summary to this module
+         */
+        mergeSummary : function(summary, targetTypeName) {
 
-			// translate function names on object into safe names
-			var swapper = function(name) {
-				switch (name) {
-					case "prototype":
-					case "__proto__":
-						return "$$proto";
-					case "toString":
-					case "hasOwnProperty":
-					case "toLocaleString":
-					case "valueOf":
-					case "isProtoTypeOf":
-					case "propertyIsEnumerable":
-						return "$_$" + name;
-					default:
-						return name;
-				}
-			};
+            // add the extra types that don't already exists
+            for (var type in summary.types) {
+                if (summary.types.hasOwnProperty(type) && !this._allTypes[type]) {
+                    this._allTypes[type] = summary.types[type];
+                }
+            }
 
-			var innerLookup = function(name, type, allTypes) {
-				var res = type && type[name];
+            // now augment the target type with the provided properties
+            // but only if a composite type is exported
+            var targetType = this._allTypes[targetTypeName];
+            if (typeof summary.provided !== 'string') {
+                for (var providedProperty in summary.provided) {
+                    if (summary.provided.hasOwnProperty(providedProperty)) {
+                        // the targetType may already have the providedProperty defined
+                        // but should override
+                        targetType[providedProperty] = summary.provided[providedProperty];
+                    }
+                }
+            }
+        },
 
-				var proto = type.$$proto;
-				if (res) {
-					return includeDefinition ? res : res.typeObj;
-				} else if (proto) {
-					return innerLookup(name, allTypes[proto.typeObj.name], allTypes);
-				} else {
-					return null;
-				}
-			};
-			var targetType = this._allTypes[this.scope(target)];
+        /**
+         * takes the name of a constructor and converts it into a type.
+         * We need to ensure that ConstructorName.prototype = { ... } does the
+         * thing that we expect.  This is why we set the $$proto property of the types
+         */
+        createConstructor : function(constructorName, rawTypeName) {
+            // don't include the parameter names since we don't want them confusing things when exported
+            constructorName = mTypes.removeParameters(constructorName);
+            this.newFleetingObject(constructorName);
+            var flobj = this.newFleetingObject(constructorName + "~proto");
+            this._allTypes[constructorName].$$proto = new mTypes.Definition(flobj, null, this.uidj);
+            this._allTypes[rawTypeName].$$proto = new mTypes.Definition(constructorName, null, this.uid);
+        },
 
-			// uncomment this if we want to hide errors where there is an unknown type being placed on the scope stack
-			if (!targetType) {
-				targetType = this.globalScope();
-			}
-			var res = innerLookup(swapper(name), targetType, this._allTypes);
-			return res;
-		},
+        findType : function(typeName) {
+            if (mTypes.isArrayType(typeName)) {
+                // TODO is there anything we need to do here?
+                // parameterized array
+                typeName = "Array";
+            }
 
-		/** removes the variable from the current type */
-		removeVariable : function(name, target) {
-			// do not allow deleting properties of built in types
-			var type = this._allTypes[this.scope(target)];
-			// 2 cases to avoid:
-			//  1. properties of builtin types cannot be deleted
-			//  2. builtin types cannot be deleted from global scope
-			if (!type.$$isBuiltin && type[name] && !(type[name] && !type.hasOwnProperty(name))) {
-				delete type[name];
-			}
-		},
+            // trim arguments if a constructor, careful to avoid a constructor prototype
+            if (typeName.charAt(0) === "?") {
+                typeName = mTypes.removeParameters(typeName);
 
-		/**
-		 * adds a file summary to this module
-		 * @param {{types, provided}} summary
-		 * @param String targetTypeName
-		 */
-		mergeSummary : function(summary, targetTypeName) {
-			var defn, existingDefn, property;
-			// add the extra types that don't already exists
-			for (var typeName in summary.types) {
-				if (summary.types.hasOwnProperty(typeName)) {
-					// create type if doesn't already exist, othewise merge
-					var type = this._allTypes[typeName];
-					var existingType = summary.types[typeName];
-					// if doesn't exist yet create it
-					// if type is built-in, then we must overwrite it with ours
-					if (!type || type.$$isBuiltin) {
-						type = this._allTypes[typeName] = {};
-						// for each property defined in the type from the sumamry,
-						// also add it to the current module's type
-						for (var typeProp in existingType) {
-							if (!type[typeProp]) {
-								type[typeProp] = mTypes.Definition.revive(existingType[typeProp]);
-							}
-						}
-					}
+                if (!this._allTypes[typeName]) {
+                    // function type has not been explicitly added to list
+                    // just return function instead
+                    return this._allTypes.Function;
+                }
+            }
+            return this._allTypes[typeName];
+        },
 
-				}
-			}
+        getAllTypes : function() {
+            return this._allTypes;
+        },
 
-			// now augment the target type with the provided properties
-			// but only if a composite type is exported
-			var targetType = this._allTypes[targetTypeName];
-			if (typeof summary.provided !== 'string') {
-				// TODO summary.provided mightbe a RecordType
-				for (var providedProperty in summary.provided) {
-					if (summary.provided.hasOwnProperty(providedProperty)) {
-						// copy over the summary into the type den
-						// the targetType may already have the providedProperty defined
-						// but should override
-						targetType[providedProperty] = mTypes.Definition.revive(summary.provided[providedProperty]);
-					}
-				}
-			}
-		},
-
-		/**
-		 * takes the name of a constructor and converts it into a type.
-		 * We need to ensure that ConstructorName.prototype = { ... } does the
-		 * thing that we expect.  This is why we set the $$proto property of the types
-		 */
-		createConstructor : function(rawTypeName) {
-			// don't include the parameter names since we don't want them confusing things when exported
-			this.newFleetingObject(rawTypeName);
-			var flobj = this.newFleetingObject(rawTypeName + "~proto");
-			this._allTypes[rawTypeName].$$proto = new mTypes.Definition(flobj.name, null, this.uid);
-		},
-
-		/** @returns {{}} entry in types array */
-		findType : function(typeObj) {
-			var typeName = mTypes.convertToSimpleTypeName(typeObj);
-			return this._allTypes[typeName];
-		},
-
-		getAllTypes : function() {
-			return this._allTypes;
-		},
-
-		/**
-		 * This function stores the target type
-		 * so it can be used as the result of this inferencing operation
-		 */
-		storeTarget : function(targetTypeName) {
-			if (!this.targetTypeName) {
-				if (!targetTypeName) {
-					targetTypeName = this.scope();
-				}
-				this.targetTypeName = targetTypeName;
-				this.targetFound = true;
-			}
-		}
-	};
+        /**
+         * This function stores the target type
+         * so it can be used as the result of this inferencing operation
+         */
+        storeTarget : function(targetType) {
+            if (!this.targetType) {
+                if (!targetType) {
+                    targetType = this.scope();
+                }
+                this.targetType = targetType;
+                this.targetFound = true;
+            }
+        }
+    };
 }
 
 function createProposalDescription(propName, propType, env) {
-	return propName + " : " + mTypes.createReadableType(propType, env);
+    return propName + " : " + mTypes.createReadableType(propType, env);
 }
 
 function createInferredProposals(targetTypeName, env, completionKind, prefix, replaceStart, proposals, relevance) {
-	var prop, propTypeObj, propName, res, type = env.getAllTypes()[targetTypeName], proto = type.$$proto;
-	if (!relevance) {
-		relevance = 100;
-	}
-	// start at the top of the prototype hierarchy so that duplicates can be removed
-	if (proto) {
-		createInferredProposals(proto.typeObj.name, env, completionKind, prefix, replaceStart, proposals, relevance - 10);
-	}
+    var prop, propName, propType, res, type = env.findType(targetTypeName), proto = type.$$proto;
+    if (!relevance) {
+        relevance = 100;
+    }
+    // start at the top of the prototype hierarchy so that duplicates can be removed
+    if (proto) {
+        createInferredProposals(proto.typeName, env, completionKind, prefix, replaceStart, proposals, relevance - 10);
+    }
 
-	// add a separator proposal
-	proposals['---dummy' + relevance] = {
-		proposal: '',
-		description: '---------------------------------',
-		relevance: relevance -1,
-		style: 'hr',
-		unselectable: true
-	};
+    // add a separator proposal
+    proposals['---dummy' + relevance] = {
+        proposal: '',
+        description: '---------------------------------',
+        relevance: relevance -1,
+        style: 'hr',
+        unselectable: true
+    };
 
-	// need to look at prototype for global and window objects
-	// so need to traverse one level up prototype hierarchy if
-	// the next level is not Object
-	var realProto = Object.getPrototypeOf(type);
-	var protoIsObject = !Object.getPrototypeOf(realProto);
-	for (prop in type) {
-		if (type.hasOwnProperty(prop) || (!protoIsObject && realProto.hasOwnProperty(prop))) {
-			if (prop.charAt(0) === "$" && prop.charAt(1) === "$") {
-				// special property
-				continue;
-			}
-			if (!proto && prop.indexOf("$_$") === 0) {
-				// no prototype that means we must decode the property name
-				propName = prop.substring(3);
-			} else {
-				propName = prop;
-			}
-			if (propName === "this" && completionKind === "member") {
-				// don't show "this" proposals for non-top-level locations
-				// (eg- this.this is wrong)
-				continue;
-			}
-			if (!type[prop].typeObj) {
-				// minified files sometimes have invalid property names (eg- numbers).  Ignore them)
-				continue;
-			}
-			if (proposalUtils.looselyMatches(prefix, propName)) {
-				propTypeObj = type[prop].typeObj;
-				if (propTypeObj.type === 'FunctionType') {
-					res = calculateFunctionProposal(propName,
-							propTypeObj, replaceStart - 1);
-					var funcDesc = res.completion + " : " + mTypes.createReadableType(propTypeObj, env);
-					proposals["$"+propName] = {
-						proposal: res.completion,
-						description: funcDesc,
-						positions: res.positions,
-						escapePosition: replaceStart + res.completion.length,
-						// prioritize methods over fields
-						relevance: relevance + 5,
-						style: 'emphasis',
-						overwrite: true
-					};
-				} else {
-					proposals["$"+propName] = {
-						proposal: propName,
-						relevance: relevance,
-						description: createProposalDescription(propName, propTypeObj, env),
-						style: 'emphasis',
-						overwrite: true
-					};
-				}
-			}
-		}
-	}
+    // need to look at prototype for global and window objects
+    // so need to traverse one level up prototype hierarchy if
+    // the next level is not Object
+    var realProto = Object.getPrototypeOf(type);
+    var protoIsObject = !Object.getPrototypeOf(realProto);
+    for (prop in type) {
+        if (type.hasOwnProperty(prop) || (!protoIsObject && realProto.hasOwnProperty(prop))) {
+            if (prop.charAt(0) === "$" && prop.charAt(1) === "$") {
+                // special property
+                continue;
+            }
+            if (!proto && prop.indexOf("$_$") === 0) {
+                // no prototype that means we must decode the property name
+                propName = prop.substring(3);
+            } else {
+                propName = prop;
+            }
+            if (propName === "this" && completionKind === "member") {
+                // don't show "this" proposals for non-top-level locations
+                // (eg- this.this is wrong)
+                continue;
+            }
+            if (!type[prop].typeName) {
+                // minified files sometimes have invalid property names (eg- numbers).  Ignore them)
+                continue;
+            }
+            if (proposalUtils.looselyMatches(prefix, propName)) {
+                propType = type[prop].typeName;
+                var first = propType.charAt(0);
+                if (first === "?" || first === "*") {
+                    // we have a function
+                    res = calculateFunctionProposal(propName,
+                            propType, replaceStart - 1);
+                    var funcDesc = res.completion + " : " + mTypes.createReadableType(propType, env);
+                    proposals["$"+propName] = {
+                        proposal: removePrefix(prefix, res.completion),
+                        description: funcDesc,
+                        positions: res.positions,
+                        escapePosition: replaceStart + res.completion.length,
+                        // prioritize methods over fields
+                        relevance: relevance + 5,
+                        style: 'emphasis'
+                    };
+                } else {
+                    proposals["$"+propName] = {
+                        proposal: removePrefix(prefix, propName),
+                        relevance: relevance,
+                        description: createProposalDescription(propName, propType, env),
+                        style: 'emphasis'
+                    };
+                }
+            }
+        }
+    }
 }
 
 function createNoninferredProposals(environment, prefix, replaceStart, proposals) {
-	var proposalAdded = false;
-	// a property to return is one that is
-	//  1. defined on the type object
-	//  2. prefixed by the prefix
-	//  3. doesn't already exist
-	//  4. is not an internal property
-	function isInterestingProperty(type, prop) {
-		return type.hasOwnProperty(prop) && prop.indexOf(prefix) === 0 && !proposals['$' + prop] && prop !== '$$proto'&& prop !== '$$isBuiltin';
-	}
-	function forType(type) {
-		for (var prop in type) {
-			if (isInterestingProperty(type, prop)) {
-				var propType = type[prop].typeObj;
-				if (propType.type === 'FunctionType') {
-					var res = calculateFunctionProposal(prop, propType, replaceStart - 1);
-					proposals[prop] = {
-						proposal: removePrefix(prefix, res.completion),
-						description: createProposalDescription(prop, propType, environment),
-						positions: res.positions,
-						escapePosition: replaceStart + res.completion.length,
-						// prioritize methods over fields
-						relevance: -99,
-						style: 'noemphasis'
-					};
-					proposalAdded = true;
-				} else {
-					proposals[prop] = {
-						proposal: removePrefix(prefix, prop),
-						description: createProposalDescription(prop, propType, environment),
-						relevance: -100,
-						style: 'noemphasis'
-					};
-					proposalAdded = true;
-				}
-			}
-		}
-	}
-	var allTypes = environment.getAllTypes();
-	for (var typeName in allTypes) {
-		// need to traverse into the prototype
-		if (allTypes[typeName].$$proto) {
-			forType(allTypes[typeName]);
-		}
-	}
+    var proposalAdded = false;
+    // a property to return is one that is
+    //  1. defined on the type object
+    //  2. prefixed by the prefix
+    //  3. doesn't already exist
+    //  4. is not an internal property
+    function isInterestingProperty(type, prop) {
+        return type.hasOwnProperty(prop) && prop.indexOf(prefix) === 0 && !proposals['$' + prop] && prop !== '$$proto'&& prop !== '$$isBuiltin';
+    }
+    function forType(type) {
+        for (var prop in type) {
+            if (isInterestingProperty(type, prop)) {
+                var propType = type[prop].typeName;
+                var first = propType.charAt(0);
+                if (first === "?" || first === "*") {
+                    var res = calculateFunctionProposal(prop, propType, replaceStart - 1);
+                    proposals[prop] = {
+                        proposal: removePrefix(prefix, res.completion),
+                        description: createProposalDescription(prop, propType, environment),
+                        positions: res.positions,
+                        escapePosition: replaceStart + res.completion.length,
+                        // prioritize methods over fields
+                        relevance: -99,
+                        style: 'noemphasis'
+                    };
+                    proposalAdded = true;
+                } else {
+                    proposals[prop] = {
+                        proposal: removePrefix(prefix, prop),
+                        description: createProposalDescription(prop, propType, environment),
+                        relevance: -100,
+                        style: 'noemphasis'
+                    };
+                    proposalAdded = true;
+                }
+            }
+        }
+    }
+    var allTypes = environment.getAllTypes();
+    for (var typeName in allTypes) {
+        // need to traverse into the prototype
+        if (allTypes[typeName].$$proto) {
+            forType(allTypes[typeName]);
+        }
+    }
 
-	if (proposalAdded) {
-		proposals['---dummy'] = {
-			proposal: '',
-			description: 'Non-inferred proposals',
-			relevance: -98,
-			style: 'noemphasis',
-			unselectable: true
-		};
-	}
+    if (proposalAdded) {
+        proposals['---dummy'] = {
+            proposal: '',
+            description: 'Non-inferred proposals',
+            relevance: -98,
+            style: 'noemphasis',
+            unselectable: true
+        };
+    }
 }
 
-function visitTypeStructure(typeObj, operation) {
-	if (typeof typeObj !== 'object') {
-		return;
-	}
-	switch (typeObj.type) {
-		case 'NullableLiteral':
-		case 'AllLiteral':
-		case 'NullLiteral':
-		case 'UndefinedLiteral':
-		case 'VoidLiteral':
-			// leaf nodes
-			return;
-
-		case 'NameExpression':
-			operation(typeObj, operation);
-			return;
-
-		case 'ArrayType':
-			visitTypeStructure(typeObj.expression, operation);
-			// fall-through
-		case 'UnionType':
-			if (typeObj.elements) {
-				typeObj.elements.forEach(function(elt) { visitTypeStructure(elt, operation); });
-			}
-			return;
-
-		case 'RecordType':
-			if (typeObj.fields) {
-				typeObj.fields.forEach(function(elt) { visitTypeStructure(elt, operation); });
-			}
-			return;
-
-		case 'FieldType':
-			visitTypeStructure(typeObj.expression, operation);
-			return;
-
-		case 'FunctionType':
-			// do we need to check for serialized functions???
-			if (typeObj.params) {
-				typeObj.params.forEach(function(elt) { visitTypeStructure(elt, operation); });
-			}
-			if (typeObj.result) {
-				visitTypeStructure(typeObj.result, operation);
-			}
-			return;
-
-		case 'ParameterType':
-			// TODO FIXADE uncomment to make the size of summaries smaller
-			// by not including parameter types in summary.
-//				typeObj.expression = { name: 'Object', type: 'NameExpression' };
-			visitTypeStructure(typeObj.expression, operation);
-			return;
-
-		case 'TypeApplication':
-			if (typeObj.applications) {
-				typeObj.applications.forEach(function(elt) { visitTypeStructure(elt, operation); });
-			}
-
-			// fall-throudh
-		case 'RestType':
-		case 'NonNullableType':
-		case 'OptionalType':
-		case 'NullableType':
-			visitTypeStructure(typeObj.expression, operation);
-			return;
-
-
-	}
-}
-
-// finds unreachable types from the given type name
-// and marks them as already seen
 function findUnreachable(currentTypeName, allTypes, alreadySeen) {
-	var currentType = allTypes[currentTypeName];
-	var operation = function(typeObj, operation) {
-		if (alreadySeen[typeObj.name]) {
-			// prevent infinite recursion for circular refs
-			return;
-		}
-
-		alreadySeen[typeObj.name] = true;
-		findUnreachable(typeObj.name, allTypes, alreadySeen);
-	};
-
-	if (currentType) {
-		for(var prop in currentType) {
-			if (currentType.hasOwnProperty(prop) && prop !== '$$isBuiltin' ) {
-				var propType = currentType[prop].typeObj;
-				// must visit the type strucutre
-				visitTypeStructure(propType, operation);
-			}
-		}
-	}
+    if (currentTypeName.charAt(0) === '*') {
+        // constructors are not stored with their arguments so need to remove them in order to find them
+        currentTypeName = mTypes.removeParameters(currentTypeName);
+    }
+    var currentType = allTypes[currentTypeName];
+    if (currentType) {
+        for(var prop in currentType) {
+            if (currentType.hasOwnProperty(prop) && prop !== '$$isBuiltin' ) {
+                var propType = currentType[prop].typeName;
+                while (mTypes.isFunctionOrConstructor(propType) || mTypes.isArrayType(propType)) {
+                    if (!alreadySeen[propType]) {
+                        alreadySeen[propType] = true;
+                        findUnreachable(propType, allTypes, alreadySeen);
+                    }
+                    if (mTypes.isFunctionOrConstructor(propType)) {
+                        propType = mTypes.extractReturnType(propType);
+                    } else if (mTypes.isArrayType(propType)) {
+                        propType = mTypes.extractArrayParameterType(propType);
+                    }
+                }
+                if (!alreadySeen[propType]) {
+                    alreadySeen[propType] = true;
+                    findUnreachable(propType, allTypes, alreadySeen);
+                }
+            }
+        }
+    }
 }
 
-/**
- * Before we can remove empty objects from the type graph, we need to update
- * the properties currently pointing to those types.  Make them point to the
- * closest non-empty type in their prototype hierarchy (most likely, this is Object).
- */
-function fixMissingPointers(currentTypeObj, allTypes, empties, alreadySeen) {
-	alreadySeen = alreadySeen || {};
-	var operation = function(typeObj, operation) {
-		while (empties[typeObj.name]) {
-			// change this to the first non-epty prototype of the empty type
-			typeObj.name = allTypes[typeObj.name].$$proto.typeObj.name;
-			if (!typeObj.name) {
-				typeObj.name = 'Object';
-			}
-		}
-		if (alreadySeen[typeObj.name]) {
-			return;
-		}
-		alreadySeen[typeObj.name] = true;
-		var currentType = allTypes[typeObj.name];
-		if (currentType) {
-			for(var prop in currentType) {
-				if (currentType.hasOwnProperty(prop) && prop !== '$$isBuiltin' ) {
-					var propType = currentType[prop].typeObj;
-					// must visit the type strucutre
-					visitTypeStructure(propType, operation);
-				}
-			}
-		}
-	};
-
-	visitTypeStructure(currentTypeObj, operation);
-}
 /**
  * filters types from the environment that should not be exported
  */
-function filterTypes(environment, kind, moduleTypeObj, provided) {
-	var moduleTypeName = doctrine.type.stringify(moduleTypeObj, {compact: true});
-	var allTypes = environment.getAllTypes();
-	allTypes.clearDefaultGlobal();
+function filterTypes(environment, kind, moduleTypeName) {
+    var allTypes = environment.getAllTypes();
+    if (kind === "global") {
+        // for global dependencies must keep the global scope, but remove all builtin global variables
+        allTypes.clearDefaultGlobal();
+    } else {
+        delete allTypes.Global;
+    }
 
-	// recursively walk the type tree to find unreachable types and delete them, too
-	var reachable = { };
-	var wasReachable = true;
-	if (moduleTypeObj.type !== "NameExpression") {
-		// TODO FIXADE duplicated code
-		visitTypeStructure(moduleTypeObj, function(typeObj, operation) {
-			if (reachable[typeObj.name]) {
-				// prevent infinite recursion for circular refs
-				return;
-			}
-			reachable[typeObj.name] = true;
-			findUnreachable(typeObj.name, allTypes, reachable);
-		});
-	} else {
-		// first remove any types that are unreachable
-		findUnreachable(moduleTypeName, allTypes, reachable);
-		if (!reachable[moduleTypeName]) {
-			// not really reachable, but need to keep it for now to track empties
-			reachable[moduleTypeName] = true;
-			wasReachable = false;
-		}
-	}
-	for (var prop in allTypes) {
-		if (allTypes.hasOwnProperty(prop) && !reachable[prop]) {
-			delete allTypes[prop];
-		}
-	}
+    // recursively walk the type tree to find unreachable types and delete them, too
+    var reachable = { };
+    // if we have a function, then the function return type and its prototype are reachable
+    // also do same if parameterized array type
+    // in the module, so add them
+    if (mTypes.isFunctionOrConstructor(moduleTypeName) || mTypes.isArrayType(moduleTypeName)) {
+        var retType = moduleTypeName;
+        while (mTypes.isFunctionOrConstructor(retType) || mTypes.isArrayType(retType)) {
+            if (mTypes.isFunctionOrConstructor(retType)) {
+                retType = mTypes.removeParameters(retType);
+                reachable[retType] = true;
+                var constrType;
+                if (retType.charAt(0) === "?") {
+                    // this is a function, not a constructor, but we also
+                    // need to expose the constructor if one exists.
+                    constrType = "*" + retType.substring(1);
+                    reachable[constrType] = true;
+                } else {
+                    constrType = retType;
+                }
+                // don't strictly need this if the protoype of the object has been changed, but OK to keep
+                reachable[constrType + "~proto"] = true;
+                retType = mTypes.extractReturnType(retType);
+            } else if (mTypes.isArrayType(retType)) {
+                retType = mTypes.extractArrayParameterType(retType);
+                if (retType) {
+                    reachable[retType] = true;
+                } else {
+                    retType = "Object";
+                }
+            }
+        }
+        reachable[retType] = true;
+    }
 
-	// now find empty types
-	var empties = {};
-	Object.keys(allTypes).forEach(function(key) {
-		if (isEmpty(key, allTypes)) {
-			empties[key] = true;
-		}
-	});
-	// now fix up pointers to empties
-	fixMissingPointers(moduleTypeObj, allTypes, empties);
-
-	if (!wasReachable) {
-		delete allTypes[moduleTypeName];
-	}
-	// don't need the empty types any more
-	Object.keys(empties).forEach(function(key) {
-		delete allTypes[key];
-	});
-
-	// now reformat the types so that they are combined and serialized
-	Object.keys(allTypes).forEach(function(typeName) {
-	    var type = allTypes[typeName];
-		for (var defName in type) {
-			if (type.hasOwnProperty(defName)) {
-				var def = type[defName];
-				def.typeSig = doctrine.type.stringify(def.typeObj, {compact: true});
-				delete def._typeObj;
-			}
-		}
-	});
-
-	if (typeof provided === 'object') {
-		for (var defName in provided) {
-			if (provided.hasOwnProperty(defName)) {
-				var def = provided[defName];
-				if (def.typeObj) {
-					def.typeSig = doctrine.type.stringify(def.typeObj, {compact: true});
-					delete def._typeObj;
-				}
-			}
-		}
-	}
-
+    findUnreachable(moduleTypeName, allTypes, reachable);
+    for (var prop in allTypes) {
+        if (allTypes.hasOwnProperty(prop) && !reachable[prop]) {
+            delete allTypes[prop];
+        }
+    }
 }
 
 var browserRegExp = /browser\s*:\s*true/;
 var nodeRegExp = /node\s*:\s*true/;
 function findGlobalObject(comments, lintOptions) {
 
-	for (var i = 0; i < comments.length; i++) {
-		var comment = comments[i];
-		if (comment.type === "Block" && (comment.value.substring(0, "jslint".length) === "jslint" ||
-										  comment.value.substring(0,"jshint".length) === "jshint")) {
-			// the lint options section.  now look for the browser or node
-			if (comment.value.match(browserRegExp)) {
-				return "Window";
-			} else if (comment.value.match(nodeRegExp)) {
-				return "Module";
-			} else {
-				return "Global";
-			}
-		}
-	}
-	if (lintOptions && lintOptions.options) {
-		if (lintOptions.options.browser === true) {
-			return "Window";
-		} else if (lintOptions.options.node === true) {
-			return "Module";
-		}
-	}
-	return "Global";
+    for (var i = 0; i < comments.length; i++) {
+        var comment = comments[i];
+        if (comment.type === "Block" && (comment.value.substring(0, "jslint".length) === "jslint" ||
+                                          comment.value.substring(0,"jshint".length) === "jshint")) {
+            // the lint options section.  now look for the browser or node
+            if (comment.value.match(browserRegExp)) {
+                return "Window";
+            } else if (comment.value.match(nodeRegExp)) {
+                return "Module";
+            } else {
+                return "Global";
+            }
+        }
+    }
+    if (lintOptions && lintOptions.options) {
+        if (lintOptions.options.browser === true) {
+            return "Window";
+        } else if (lintOptions.options.node === true) {
+            return "Module";
+        }
+    }
+    return "Global";
 }
 
 function filterAndSortProposals(proposalsObj) {
-	// convert from object to array
-	var proposals = [];
-	for (var prop in proposalsObj) {
-		if (proposalsObj.hasOwnProperty(prop)) {
-			proposals.push(proposalsObj[prop]);
-		}
-	}
-	proposals.sort(function(l,r) {
-		// sort by relevance and then by name
-		if (l.relevance > r.relevance) {
-			return -1;
-		} else if (r.relevance > l.relevance) {
-			return 1;
-		}
+    // convert from object to array
+    var proposals = [];
+    for (var prop in proposalsObj) {
+        if (proposalsObj.hasOwnProperty(prop)) {
+            proposals.push(proposalsObj[prop]);
+        }
+    }
+    proposals.sort(function(l,r) {
+        // sort by relevance and then by name
+        if (l.relevance > r.relevance) {
+            return -1;
+        } else if (r.relevance > l.relevance) {
+            return 1;
+        }
 
-		var ldesc = l.description.toLowerCase();
-		var rdesc = r.description.toLowerCase();
-		if (ldesc < rdesc) {
-			return -1;
-		} else if (rdesc < ldesc) {
-			return 1;
-		}
-		return 0;
-	});
+        var ldesc = l.description.toLowerCase();
+        var rdesc = r.description.toLowerCase();
+        if (ldesc < rdesc) {
+            return -1;
+        } else if (rdesc < ldesc) {
+            return 1;
+        }
+        return 0;
+    });
 
-	// filter trailing and leading dummies, as well as double dummies
-	var toRemove = [];
+    // filter trailing and leading dummies, as well as double dummies
+    var toRemove = [];
 
-	// now remove any leading or trailing dummy proposals as well as double dummies
-	var i = proposals.length -1;
-	while (i >= 0 && proposals[i].description.indexOf('---') === 0) {
-		toRemove[i] = true;
-		i--;
-	}
-	i = 0;
-	while (i < proposals.length && proposals[i].description.indexOf('---') === 0) {
-		toRemove[i] = true;
-		i++;
-	}
-	i += 1;
-	while (i < proposals.length) {
-		if (proposals[i].description.indexOf('---') === 0 && proposals[i-1].description.indexOf('---') === 0) {
-			toRemove[i] = true;
-		}
-		i++;
-	}
+    // now remove any leading or trailing dummy proposals as well as double dummies
+    var i = proposals.length -1;
+    while (i >= 0 && proposals[i].description.indexOf('---') === 0) {
+        toRemove[i] = true;
+        i--;
+    }
+    i = 0;
+    while (i < proposals.length && proposals[i].description.indexOf('---') === 0) {
+        toRemove[i] = true;
+        i++;
+    }
+    i += 1;
+    while (i < proposals.length) {
+        if (proposals[i].description.indexOf('---') === 0 && proposals[i-1].description.indexOf('---') === 0) {
+            toRemove[i] = true;
+        }
+        i++;
+    }
 
-	var newProposals = [];
-	for (i = 0; i < proposals.length; i++) {
-		if (!toRemove[i]) {
-			newProposals.push(proposals[i]);
-		}
-	}
+    var newProposals = [];
+    for (i = 0; i < proposals.length; i++) {
+        if (!toRemove[i]) {
+            newProposals.push(proposals[i]);
+        }
+    }
 
-	return newProposals;
+    return newProposals;
 }
 
 
@@ -2459,9 +2193,9 @@ function filterAndSortProposals(proposalsObj) {
  * @param {{hasDependency,performIndex,retrieveSummary,retrieveGlobalSummaries}} indexer
  * @param {{global:[],options:{browser:Boolean}}=} lintOptions optional set of extra lint options that can be overridden in the source (jslint or jshint)
  */
-EsprimaJavaScriptContentAssistProvider = function (indexer, lintOptions) {
-	this.indexer = indexer;
-	this.lintOptions = lintOptions;
+function EsprimaJavaScriptContentAssistProvider(indexer, lintOptions) {
+    this.indexer = indexer;
+    this.lintOptions = lintOptions;
 }
 
 /**
@@ -2469,293 +2203,284 @@ EsprimaJavaScriptContentAssistProvider = function (indexer, lintOptions) {
  */
 EsprimaJavaScriptContentAssistProvider.prototype = {
 
-	_doVisit : function(root, environment) {
-		// first augment the global scope with things we know
-		addLintGlobals(environment, this.lintOptions);
-		addIndexedGlobals(environment);
+    _doVisit : function(root, environment) {
+        // first augment the global scope with things we know
+        addLintGlobals(environment, this.lintOptions);
+        addIndexedGlobals(environment);
 
-		// now we can remove all non-doc comments from the comments list
-		var newComments = [];
-		for (var i = 0; i < environment.comments.length; i++) {
-			if (environment.comments[i].value.charAt(0) === '*') {
-				newComments.push(environment.comments[i]);
-			}
-		}
-		environment.comments = newComments;
+        // now we can remove all non-doc comments from the comments list
+        var newComments = [];
+        for (var i = 0; i < environment.comments.length; i++) {
+            if (environment.comments[i].value.charAt(0) === '*') {
+                newComments.push(environment.comments[i]);
+            }
+        }
+        environment.comments = newComments;
 
-		try {
-			mVisitor.visit(root, environment, inferencer, inferencerPostOp);
-		} catch (done) {
-			if (typeof done !== "string") {
-				// a real error
-				throw done;
-			}
-			return done;
-		}
-		throw new Error("The visit function should always end with a throwable");
-	},
+        try {
+            mVisitor.visit(root, environment, inferencer, inferencerPostOp);
+        } catch (done) {
+            if (typeof done !== "string") {
+                // a real error
+                throw done;
+            }
+            return done;
+        }
+        throw new Error("The visit function should always end with a throwable");
+    },
 
-	/**
-	 * implements the Orion content assist API
-	 */
-	computeProposals: function(buffer, offset, context) {
-		if (context.selection && context.selection.start !== context.selection.end) {
-			// only propose if an empty selection.
-			return null;
-		}
+    /**
+     * implements the Orion content assist API
+     */
+    computeProposals: function(buffer, offset, context) {
+        if (context.selection && context.selection.start !== context.selection.end) {
+            // only propose if an empty selection.
+            return null;
+        }
 
-		try {
-			var root = mVisitor.parse(buffer);
-			if (!root) {
-				// assume a bad parse
-				return null;
-			}
-			// note that if selection has length > 0, then just ignore everything past the start
-			var completionKind = shouldVisit(root, offset, context.prefix, buffer);
-			if (completionKind) {
-				var environment = createEnvironment({ buffer: buffer, uid : "local", offset : offset, indexer : this.indexer, globalObjName : findGlobalObject(root.comments, this.lintOptions), comments : root.comments });
-				// must defer inferring the containing function block until the end
-				environment.defer = completionKind.toDefer;
-				if (environment.defer) {
-					// remove these comments from consideration until we are inferring the deferred
-					environment.deferredComments = extractDocComments(environment.comments, environment.defer.range);
-				}
-				var target = this._doVisit(root, environment);
-				var proposalsObj = { };
-				createInferredProposals(target, environment, completionKind.kind, context.prefix, offset - context.prefix.length, proposalsObj);
-				if (!context.inferredOnly) {
-					// include the entire universe as potential proposals
-					createNoninferredProposals(environment, context.prefix, offset - context.prefix.length, proposalsObj);
-				}
-				return filterAndSortProposals(proposalsObj);
-			} else {
-				// invalid completion location
-				return [];
-			}
-		} catch (e) {
-			if (typeof scriptedLogger !== "undefined") {
-				scriptedLogger.error(e.message, "CONTENT_ASSIST");
-				scriptedLogger.error(e.stack, "CONTENT_ASSIST");
-			}
-			throw (e);
-		}
-	},
+        try {
+            var root = mVisitor.parse(buffer);
+            if (!root) {
+                // assume a bad parse
+                return null;
+            }
+            // note that if selection has length > 0, then just ignore everything past the start
+            var completionKind = shouldVisit(root, offset, context.prefix, buffer);
+            if (completionKind) {
+                var environment = createEnvironment({ buffer: buffer, uid : "local", offset : offset, indexer : this.indexer, globalObjName : findGlobalObject(root.comments, this.lintOptions), comments : root.comments });
+                // must defer inferring the containing function block until the end
+                environment.defer = completionKind.toDefer;
+                if (environment.defer) {
+                    // remove these comments from consideration until we are inferring the deferred
+                    environment.deferredComments = extractDocComments(environment.comments, environment.defer.range);
+                }
+                var target = this._doVisit(root, environment);
+                var proposalsObj = { };
+                createInferredProposals(target, environment, completionKind.kind, context.prefix, offset - context.prefix.length, proposalsObj);
+                if (false && !context.inferredOnly) {
+                    // include the entire universe as potential proposals
+                    createNoninferredProposals(environment, context.prefix, offset - context.prefix.length, proposalsObj);
+                }
+                return filterAndSortProposals(proposalsObj);
+            } else {
+                // invalid completion location
+                return [];
+            }
+        } catch (e) {
+            if (typeof scriptedLogger !== "undefined") {
+                scriptedLogger.error(e.message, "CONTENT_ASSIST");
+                scriptedLogger.error(e.stack, "CONTENT_ASSIST");
+            }
+            throw (e);
+        }
+    },
 
-	computeCompletions: function(buffer, offset, prefix) {
-		try {
-			var root = mVisitor.parse(buffer);
-			if (!root) {
-				// assume a bad parse
-				return null;
-			}
-			// note that if selection has length > 0, then just ignore everything past the start
-			var completionKind = shouldVisit(root, offset, prefix, buffer);
-			if (completionKind) {
-				var environment = createEnvironment({ buffer: buffer, uid : "local", offset : offset, indexer : this.indexer, globalObjName : findGlobalObject(root.comments, this.lintOptions), comments : root.comments });
-				// must defer inferring the containing function block until the end
-				environment.defer = completionKind.toDefer;
-				if (environment.defer) {
-					// remove these comments from consideration until we are inferring the deferred
-					environment.deferredComments = extractDocComments(environment.comments, environment.defer.range);
-				}
-				var target = this._doVisit(root, environment);
-				var proposalsObj = { };
-				createInferredProposals(target, environment, completionKind.kind, prefix, offset - prefix.length, proposalsObj);
-				return filterAndSortProposals(proposalsObj);
-			} else {
-				// invalid completion location
-				return [];
-			}
-		} catch (e) {
-			throw (e);
-		}
-	},
+    computeCompletions: function(buffer, offset, prefix) {
+    try {
+        var root = mVisitor.parse(buffer);
+        if (!root) {
+            // assume a bad parse
+            return null;
+        }
+        // note that if selection has length > 0, then just ignore everything past the start
+        var completionKind = shouldVisit(root, offset, prefix, buffer);
+        if (completionKind) {
+            var environment = createEnvironment({ buffer: buffer, uid : "local", offset : offset, indexer : this.indexer, globalObjName : findGlobalObject(root.comments, this.lintOptions), comments : root.comments });
+            // must defer inferring the containing function block until the end
+            environment.defer = completionKind.toDefer;
+            if (environment.defer) {
+                // remove these comments from consideration until we are inferring the deferred
+                environment.deferredComments = extractDocComments(environment.comments, environment.defer.range);
+            }
+            var target = this._doVisit(root, environment);
+            var proposalsObj = { };
+            createInferredProposals(target, environment, completionKind.kind, prefix, offset - prefix.length, proposalsObj);
+            return filterAndSortProposals(proposalsObj);
+        } else {
+            // invalid completion location
+            return [];
+        }
+    } catch (e) {
+        throw (e);
+    }
+},
 
-	_internalFindDefinition : function(buffer, offset, findName) {
-		var toLookFor;
-		var root = mVisitor.parse(buffer);
-		if (!root) {
-			// assume a bad parse
-			return null;
-		}
-		var funcList = [];
-		var environment = createEnvironment({ buffer: buffer, uid : "local", offset : offset, indexer : this.indexer, globalObjName : findGlobalObject(root.comments, this.lintOptions), comments : root.comments });
-		var findIdentifier = function(node) {
-			if ((node.type === "Identifier" || node.type === "ThisExpression") && inRange(offset, node.range, true)) {
-				toLookFor = node;
-				// cut visit short
-				throw "done";
-			}
-			// FIXADE esprima bug...some call expressions have incorrect slocs.
-			// This is fixed in trunk of esprima.
-			// after next upgrade of esprima if the following has correct slocs, then
-			// can remove the second part of the &&
-			// mUsers.getUser().name
-			if (node.range[0] > offset &&
-					(node.type === "ExpressionStatement" ||
-					 node.type === "ReturnStatement" ||
-					 node.type === "ifStatement" ||
-					 node.type === "WhileStatement" ||
-					 node.type === "Program")) {
-				// not at a valid hover location
-				throw "no hover";
-			}
 
-			// the last function pushed on is the one that we need to defer
-			if (node.type === "FunctionDeclaration" || node.type === "FunctionExpression") {
-				funcList.push(node);
-			}
-			return true;
-		};
+    _internalFindDefinition : function(buffer, offset, findName) {
+        var toLookFor;
+        var root = mVisitor.parse(buffer);
+        if (!root) {
+            // assume a bad parse
+            return null;
+        }
+        var funcList = [];
+        var environment = createEnvironment({ buffer: buffer, uid : "local", offset : offset, indexer : this.indexer, globalObjName : findGlobalObject(root.comments, this.lintOptions), comments : root.comments });
+        var findIdentifier = function(node) {
+            if ((node.type === "Identifier" || node.type === "ThisExpression") && inRange(offset, node.range, true)) {
+                toLookFor = node;
+                // cut visit short
+                throw "done";
+            }
+            // FIXADE esprima bug...some call expressions have incorrect slocs.
+            // This is fixed in trunk of esprima.
+            // after next upgrade of esprima if the following has correct slocs, then
+            // can remove the second part of the &&
+            //    mUsers.getUser().name
+            if (node.range[0] > offset &&
+                    (node.type === "ExpressionStatement" ||
+                     node.type === "ReturnStatement" ||
+                     node.type === "ifStatement" ||
+                     node.type === "WhileStatement" ||
+                     node.type === "Program")) {
+                // not at a valid hover location
+                throw "no hover";
+            }
 
-		try {
-			mVisitor.visit(root, {}, findIdentifier, function(node) {
-				if (node === funcList[funcList.length-1]) {
-					funcList.pop();
-				}
-			});
-		} catch (e) {
-			if (e === "no hover") {
-				// not at a valid hover location
-				return null;
-			} else if (e === "done") {
-				// valid hover...continue
-			} else {
-				// a real exception
-				throw e;
-			}
-		}
-		if (!toLookFor) {
-			// no hover target found
-			return null;
-		}
-		// must defer inferring the containing function block until the end
-		environment.defer = funcList.pop();
-		if (environment.defer && toLookFor === environment.defer.id) {
-			// don't defer if target is name of function
-			delete environment.defer;
-		}
+            // the last function pushed on is the one that we need to defer
+            if (node.type === "FunctionDeclaration" || node.type === "FunctionExpression") {
+                funcList.push(node);
+            }
+            return true;
+        };
 
-		if (environment.defer) {
-			// remove these comments from consideration until we are inferring the deferred
-			environment.deferredComments = extractDocComments(environment.comments, environment.defer.range);
-		}
+        try {
+            mVisitor.visit(root, {}, findIdentifier, function(node) {
+                if (node === funcList[funcList.length-1]) {
+                    funcList.pop();
+                }
+            });
+        } catch (e) {
+            if (e === "no hover") {
+                // not at a valid hover location
+                return null;
+            } else if (e === "done") {
+                // valid hover...continue
+            } else {
+                // a real exception
+                throw e;
+            }
+        }
+        if (!toLookFor) {
+            // no hover target found
+            return null;
+        }
+        // must defer inferring the containing function block until the end
+        environment.defer = funcList.pop();
+        if (environment.defer && toLookFor === environment.defer.id) {
+            // don't defer if target is name of function
+            delete environment.defer;
+        }
 
-		var target = this._doVisit(root, environment);
-		var lookupName = toLookFor.type === "Identifier" ? toLookFor.name : 'this';
-		var maybeType = environment.lookupTypeObj(lookupName, toLookFor.extras.target || target, true);
-		if (maybeType) {
-			var hover = mTypes.styleAsProperty(lookupName, findName) + " : " + mTypes.createReadableType(maybeType.typeObj, environment, true, 0, findName);
-			maybeType.hoverText = hover;
-			return maybeType;
-		} else {
-			return null;
-		}
+        if (environment.defer) {
+            // remove these comments from consideration until we are inferring the deferred
+            environment.deferredComments = extractDocComments(environment.comments, environment.defer.range);
+        }
 
-	},
-	/**
-	 * Computes the hover information for the provided offset
-	 */
-	computeHover: function(buffer, offset) {
-		return this._internalFindDefinition(buffer, offset, true);
-	},
+        var target = this._doVisit(root, environment);
+        var lookupName = toLookFor.type === "Identifier" ? toLookFor.name : 'this';
+        var maybeType = environment.lookupName(lookupName, toLookFor.extras.target || target, false, true);
+        if (maybeType) {
+            var hover = mTypes.styleAsProperty(lookupName, findName) + " : " + mTypes.createReadableType(maybeType.typeName, environment, true, 0, findName);
+            maybeType.hoverText = hover;
+            return maybeType;
+        } else {
+            return null;
+        }
 
-	findDefinition : function(buffer, offset) {
-		return this._internalFindDefinition(buffer, offset, false);
-	},
+    },
+    /**
+     * Computes the hover information for the provided offset
+     */
+    computeHover: function(buffer, offset) {
+        return this._internalFindDefinition(buffer, offset, true);
+    },
 
-	/**
-	 * Computes a summary of the file that is suitable to be stored locally and used as a dependency
-	 * in another file
-	 * @param {String} buffer
-	 * @param {String} fileName
-	 */
-	computeSummary: function(buffer, fileName) {
-		var root = mVisitor.parse(buffer);
-		if (!root) {
-			// assume a bad parse
-			return null;
-		}
-		var environment = createEnvironment({ buffer: buffer, uid : fileName, globalObjName : findGlobalObject(root.comments, this.lintOptions), comments : root.comments, indexer : this.indexer });
-		try {
-			this._doVisit(root, environment);
-		} catch (e) {
-			if (typeof scriptedLogger !== "undefined") {
-				scriptedLogger.error("Problem inferring in: " + fileName, "CONTENT_ASSIST");
-				scriptedLogger.error(e.message, "CONTENT_ASSIST");
-				scriptedLogger.error(e.stack, "CONTENT_ASSIST");
-			}
-			throw (e);
-		}
-		var providedType;
-		var kind;
-		var modTypeObj;
-		if (environment.amdModule) {
-			// provide the exports of the AMD module
-			// the exports is the return value of the final argument
-			var args = environment.amdModule["arguments"];
-			if (args && args.length > 0) {
-				modTypeObj = mTypes.extractReturnType(args[args.length-1].extras.inferredTypeObj);
-			} else {
-				modTypeObj = mTypes.OBJECT_TYPE;
-			}
-			kind = "AMD";
-		} else if (environment.commonjsModule) {
-			// a wrapped commonjs module
-			// we have already checked the correctness of this function
-			var exportsParam = environment.commonjsModule["arguments"][0].params[1];
-			modTypeObj = exportsParam.extras.inferredTypeObj;
-			providedType = environment.findType(modTypeObj);
+    findDefinition : function(buffer, offset) {
+        return this._internalFindDefinition(buffer, offset, false);
+    },
 
-		} else {
-			// assume a non-module
-			providedType = environment.globalScope();
+    /**
+     * Computes a summary of the file that is suitable to be stored locally and used as a dependency
+     * in another file
+     * @param {String} buffer
+     * @param {String} fileName
+     */
+    computeSummary: function(buffer, fileName) {
+        var root = mVisitor.parse(buffer);
+        if (!root) {
+            // assume a bad parse
+            return null;
+        }
+        var environment = createEnvironment({ buffer: buffer, uid : fileName, globalObjName : findGlobalObject(root.comments, this.lintOptions), comments : root.comments, indexer : this.indexer });
+        try {
+            this._doVisit(root, environment);
+        } catch (e) {
+            if (typeof scriptedLogger !== "undefined") {
+                scriptedLogger.error("Problem with: " + fileName, "CONTENT_ASSIST");
+                scriptedLogger.error(e.message, "CONTENT_ASSIST");
+                scriptedLogger.error(e.stack, "CONTENT_ASSIST");
+            }
+            throw (e);
+        }
+        var provided;
+        var kind;
+        var modType;
+        if (environment.amdModule) {
+            // provide the exports of the AMD module
+            // the exports is the return value of the final argument
+            var args = environment.amdModule["arguments"];
+            if (args && args.length > 0) {
+                modType = mTypes.extractReturnType(args[args.length-1].extras.inferredType);
+            } else {
+                modType = "Object";
+            }
+            kind = "AMD";
+        } else if (environment.commonjsModule) {
+            // a wrapped commonjs module
+            // we have already checked the correctness of this function
+            var exportsParam = environment.commonjsModule["arguments"][0].params[1];
+            modType = exportsParam.extras.inferredType;
+            provided = provided = environment.findType(modType);
 
-			// if there is an exports global or a module.exports global, then assume commonjs
-			var maybeExports = providedType.exports ||
-					(providedType.module && environment.getAllTypes()[providedType.module.typeObj.name] &&
-					environment.getAllTypes()[providedType.module.typeObj.name].exports);
+        } else {
+            // assume a non-module
+            provided = environment.globalScope();
 
-			if (maybeExports) {
-				// actually, commonjs
-				kind = "commonjs";
-				modTypeObj = maybeExports.typeObj;
-			} else {
-				kind = "global";
-				modTypeObj = providedType['this'].typeObj;
-			}
-		}
+            if (provided.exports) {
+                // actually, commonjs
+                kind = "commonjs";
+                modType = provided.exports.typeName;
+            } else {
+                kind = "global";
+                modType = environment.globalTypeName();
+            }
+        }
 
-		// simplify the exported type
-		if (!mTypes.isFunctionOrConstructor(modTypeObj) &&
-			!environment.findType(modTypeObj).$$isBuiltin) {
+        // simplify the exported type
+        if (mTypes.isFunctionOrConstructor(modType) || environment.findType(modType).$$isBuiltin) {
+            // this module provides a built in type or a function
+            provided = modType;
+        } else {
+            // this module provides a composite type
+            provided = environment.findType(modType);
+        }
 
-			// this module provides a composite type
-			providedType = environment.findType(modTypeObj);
-		}
 
-		var allTypes = environment.getAllTypes();
+        // now filter the builtins since they are always available
+        filterTypes(environment, kind, modType);
 
-		// now filter the builtins since they are always available
-		filterTypes(environment, kind, modTypeObj, providedType);
+        var allTypes = environment.getAllTypes();
 
-		// Cases when provided type is not a record type.  store as a string
-		// warning...not all cases handled here...eg- union types
-		if (mTypes.isFunctionOrConstructor(modTypeObj) ||
-			(environment.findType(modTypeObj) && environment.findType(modTypeObj).$$isBuiltin)) {
-			providedType = doctrine.type.stringify(modTypeObj, {compact: true});
-		}
-
-		return {
-			provided : providedType,
-			types : allTypes,
-			kind : kind
-		};
-	}
+        return {
+            provided : provided,
+            types : allTypes,
+            kind : kind
+        };
+    }
 };
 
-module.exports = EsprimaJavaScriptContentAssistProvider;
-// 	return {
-// 		EsprimaJavaScriptContentAssistProvider : EsprimaJavaScriptContentAssistProvider
-// 	};
+exports.EsprimaJavaScriptContentAssistProvider = EsprimaJavaScriptContentAssistProvider;
+//     return {
+//         EsprimaJavaScriptContentAssistProvider : EsprimaJavaScriptContentAssistProvider
+//     };
 // });

@@ -369,11 +369,11 @@ function rewind() {
         if (v!==idx) {
           doRewind=true;
         }
-    }	        
+    }         
     if (doRewind) {
-        index = idx;
-        buffer = null;
-        extra.lastRewindLocation = index;
+      index = idx;
+      buffer = null;
+      extra.lastRewindLocation = index;
     }
 }
 
@@ -1690,8 +1690,8 @@ function attemptRecoveryNonComputedProperty(token) {
         if (ch==='.' && rewindInfo.lineChange && token.value==='(') {
             // do not recover in this case
         } else if (ch==='.') {
-            index = idx+1;
-            buffer=null;
+          index = idx+1;
+          buffer=null;
         }
     }
 }
@@ -2315,17 +2315,17 @@ function parseIfStatement() {
         expect(')');
     } catch (e) {
         if (extra.errors) {
-            pushError(e);
-            // If a { was hit instead of a ) then don't consume it, let us assume a ')' was 
-            // missed and the consequent block is OK
-            if (source[e.index] === '{') {
-              index=e.index;
-              buffer=null;
-            // activating this block will mean the following statement is parsed as a consequent.
-            // without it the statement is considered not at all part of the if at all
+          pushError(e);
+          // If a { was hit instead of a ) then don't consume it, let us assume a ')' was 
+          // missed and the consequent block is OK
+          if (source[e.index] === '{') {
+            index=e.index;
+            buffer=null;
+          // activating this block will mean the following statement is parsed as a consequent.
+          // without it the statement is considered not at all part of the if at all
 //            } else {
 //              rewind();
-            }
+          }
         } else {
             throw e;
         }
@@ -3476,8 +3476,8 @@ function patch() {
             try {
                 return parseFunction.apply(null, arguments);
             } catch (e) {
-				pushError(e);
-				return null;
+      pushError(e);
+      return null;
             }
         };
     }
@@ -3488,8 +3488,8 @@ function patch() {
             try {
                 return parseFunction.apply(null, arguments);
             } catch (e) {
-				pushError(e);
-//					return null;
+      pushError(e);
+//          return null;
             }
         };
     }

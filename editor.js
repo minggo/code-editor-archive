@@ -11,7 +11,4 @@ editor.setTheme('ace/theme/monokai');
 editor.getSession().setMode('ace/mode/javascript');
 editor.$blockScrolling = Infinity;
 
-require('./grammer_completer.js');
-
-// keep keyWordCompleter and add our own completer
-helper.initCompleters();
+helper.initCompleter();
