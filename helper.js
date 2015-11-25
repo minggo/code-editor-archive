@@ -7,6 +7,11 @@ path = require('path');
 var cocos2dContent = fs.readFileSync(path.join(__dirname, 'cocos2d-js-v3.8.js'), 'utf8');
 
 exports.enalbeKeyWordCompleter = function() {
+  for (var i in editor.completers) {
+    var completer = editor.completers[i];
+    if (completer === langTools.keyWordCompleter)
+        return;
+  }
   editor.completers.push(langTools.keyWordCompleter);
 }
 

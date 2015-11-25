@@ -14,6 +14,13 @@ editor.on('change', function(e) {
 
 var myCompleter = {
   getCompletions: function(editor, session, pos, prefix, callback) {
+    // if the pop up window is triggered by `.`, such as foo., then disable keyWordCompleter,
+    // because now it wants to access member varaibles
+    if (prefix === '')
+      helper.disableKeyWordCompleter();
+    else
+      helper.enalbeKeyWordCompleter();
+
     var completions = [];
     
     var proposals = computeCompletions(editor, session, pos, prefix);
@@ -25,7 +32,10 @@ var myCompleter = {
     }
 
     callback(null, completions);
-  }
+  },
+
+  // add this line to make foo. can trigger the pop-up window
+  identifierRegexps: [ /[a-zA-Z_0-9\$\-\u00A2-\uFFFF.]/ ]
 };
 
 // use esprima to parse the file and return completions

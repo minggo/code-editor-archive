@@ -2276,34 +2276,34 @@ EsprimaJavaScriptContentAssistProvider.prototype = {
     },
 
     computeCompletions: function(buffer, offset, prefix) {
-    try {
-        var root = mVisitor.parse(buffer);
-        if (!root) {
-            // assume a bad parse
-            return null;
-        }
-        // note that if selection has length > 0, then just ignore everything past the start
-        var completionKind = shouldVisit(root, offset, prefix, buffer);
-        if (completionKind) {
-            var environment = createEnvironment({ buffer: buffer, uid : "local", offset : offset, indexer : this.indexer, globalObjName : findGlobalObject(root.comments, this.lintOptions), comments : root.comments });
-            // must defer inferring the containing function block until the end
-            environment.defer = completionKind.toDefer;
-            if (environment.defer) {
-                // remove these comments from consideration until we are inferring the deferred
-                environment.deferredComments = extractDocComments(environment.comments, environment.defer.range);
+        try {
+            var root = mVisitor.parse(buffer);
+            if (!root) {
+                // assume a bad parse
+                return null;
             }
-            var target = this._doVisit(root, environment);
-            var proposalsObj = { };
-            createInferredProposals(target, environment, completionKind.kind, prefix, offset - prefix.length, proposalsObj);
-            return filterAndSortProposals(proposalsObj);
-        } else {
-            // invalid completion location
-            return [];
+            // note that if selection has length > 0, then just ignore everything past the start
+            var completionKind = shouldVisit(root, offset, prefix, buffer);
+            if (completionKind) {
+                var environment = createEnvironment({ buffer: buffer, uid : "local", offset : offset, indexer : this.indexer, globalObjName : findGlobalObject(root.comments, this.lintOptions), comments : root.comments });
+                // must defer inferring the containing function block until the end
+                environment.defer = completionKind.toDefer;
+                if (environment.defer) {
+                    // remove these comments from consideration until we are inferring the deferred
+                    environment.deferredComments = extractDocComments(environment.comments, environment.defer.range);
+                }
+                var target = this._doVisit(root, environment);
+                var proposalsObj = { };
+                createInferredProposals(target, environment, completionKind.kind, prefix, offset - prefix.length, proposalsObj);
+                return filterAndSortProposals(proposalsObj);
+            } else {
+                // invalid completion location
+                return [];
+            }
+        } catch (e) {
+            throw (e);
         }
-    } catch (e) {
-        throw (e);
-    }
-},
+    },
 
 
     _internalFindDefinition : function(buffer, offset, findName) {
