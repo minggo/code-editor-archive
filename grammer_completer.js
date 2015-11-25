@@ -14,12 +14,12 @@ editor.on('change', function(e) {
 
 var myCompleter = {
   getCompletions: function(editor, session, pos, prefix, callback) {
-    // if the pop up window is triggered by `.`, such as foo., then disable keyWordCompleter,
-    // because now it wants to access member varaibles
+    // if the pop up window is triggered by `.`, such as foo., then should disable other keyWordCompleters,
+    // because we know it wants to access attributes now
     if (prefix === '')
-      helper.disableKeyWordCompleter();
+      helper.disableSystemCompleters();
     else
-      helper.enalbeKeyWordCompleter();
+      helper.enableSystemCompleters();
 
     var completions = [];
     
