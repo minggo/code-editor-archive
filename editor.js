@@ -1,5 +1,3 @@
-
-
 path = require('path');
 fs = require('fs');
 
@@ -32,8 +30,6 @@ var myCompleter = {
       enableSystemCompleters();
 
     var completions = [];
-    
-    
     var proposals = computeCompletions(editor, session, pos, prefix);
     for (var i in proposals) {
       var proposal = proposals[i];
@@ -117,32 +113,6 @@ editor.setTheme('ace/theme/monokai');
 editor.getSession().setMode('ace/mode/javascript');
 editor.$blockScrolling = Infinity;
 editor.completers = [myCompleter, langTools.keyWordCompleter, langTools.snippetCompleter];
-
-// add a keyboard to save file
-// editor.commands.addCommand({
-//   name: 'saveFile',
-//   bindKey: {mac:'Command-s'},
-//   exec: function(editor) {
-
-//     // select a file if it is not saved
-//     if (currentEdittingFile === UNKNOWN_FILE_NAME) {
-//       var ipc = require('electron').ipcRenderer;
-//       currentEdittingFile = ipc.sendSync('editor:openDialog');
-//     }
-    
-//     // save file content
-//     fs.writeFileSync(currentEdittingFile, editor.getValue());
-
-//     // save the file summary if it is changed
-//     if (currentFileIsChanged) {
-//       var EsprimaHelper = require('./esprima-helper.js');
-//       var esprimaHelper = new EsprimaHelper(currentEdittingFile);
-//       // force to save file summary
-//       esprimaHelper.saveFileSummary(currentEdittingFile, editor.getValue(), true);
-//       currentEdittingFile = false;
-//     }
-//   }
-// });
 
 
 editor.on('change', function(e){

@@ -1,5 +1,6 @@
 fs = require('fs');
 path = require('path');
+helper = require('./helper.js');
 
 EsprimaJavaScriptContentAssistProvider = require('./esprima/esprimaJsContentAssist.js').EsprimaJavaScriptContentAssistProvider;
 
@@ -15,10 +16,8 @@ var EsprimaHelper = function(fileName) {
 
   this.retrieveSummary = function(fileName) {
     // get the summary of `file_name`, if it is not exists, then generate it if possible
-    var basename = path.dirname(instance.fileName);
-    fileName = path.join(basename, fileName);
-
-    if (path.extname(fileName) === '.js')
+    fileName = helper.findFile(fileName + '.js');
+    if (fileName)
       return instance.getOrCreateSummary(fileName);
     else
       return null;
@@ -40,7 +39,7 @@ EsprimaHelper.prototype = {
     if (!summary) {
       // generate summary for the file
       if (!fs.existsSync(fileName)) {
-        console.log(this.fileName + ' require unexists file: ' + fileName);
+        // console.log(this.fileName + ' require unexists file: ' + fileName);
         return null;
       }
 
