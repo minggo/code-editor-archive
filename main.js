@@ -30,6 +30,15 @@ app.on('ready', function() {
   // Open the DevTools.
   mainWindow.webContents.openDevTools();
 
+//   var ipcMain = require('electron').ipcMain;
+//   ipcMain.on('editor:openDialog', function(event, arg) {
+//   var dialog = require('electron').dialog;
+//   var result = dialog.showSaveDialog({browserWindow:mainWindow});
+  
+//   event.returnValue = result;
+//   console.log(result);
+// });
+
   // Emitted when the window is closed.
   mainWindow.on('closed', function() {
     // Dereference the window object, usually you would store windows
@@ -38,3 +47,4 @@ app.on('ready', function() {
     mainWindow = null;
   });
 });
+

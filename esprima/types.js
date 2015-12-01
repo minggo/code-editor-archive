@@ -49,6 +49,8 @@ var Global = function() {};
 Global.prototype = {
     $$proto : new Definition("Object"),
 
+    // ?String: return type
+    // uri: parameter type
     decodeURI : new Definition("?String:uri"),
     encodeURI : new Definition("?String:uri"),
     'eval' : new Definition("?Object:toEval"),
@@ -71,7 +73,9 @@ Global.prototype = {
     "NaN" : new Definition("Number"),
     "Infinity" : new Definition("Number"),
     decodeURIComponent : new Definition("?String:encodedURIString"),
-    encodeURIComponent : new Definition("?String:decodedURIString")
+    encodeURIComponent : new Definition("?String:decodedURIString"),
+
+    // "cc": new Definition("cc"),
 
     // not included since not meant to be referenced directly
     // EvalError, RangeError, ReferenceError, SyntaxError, TypeError, URIError
@@ -355,6 +359,30 @@ Types.prototype = {
         $_$propertyIsEnumerable: new Definition("?Boolean:property")
     },
 
+    // cc: {
+    // 	$$isBuiltin: true,
+    // 	Sprite: new Definition("ccSprite"),
+    // 	$$proto : new Definition("Object"),
+    // },
+
+    // ccPosition: {
+    // 	$$isBuiltin: true,
+    // 	x: new Definition("Number"),
+    // 	y: new Definition("Number"),
+    // 	$$proto: new Definition("Object"),
+    // },
+
+    // ccNode: {
+    // 	$$isBuiltin: true,
+    // 	setPosition: new Definition("?undefined:x,y"),
+    //     $$proto : new Definition("Object"),
+    // },
+
+    // ccSprite: {
+    // 	$$isBuiltin: true,
+    // 	$$proto : new Definition("ccNode"),
+    // },
+
     /**
      * See 15.3.4 Properties of the Function Prototype Object
      */
@@ -485,7 +513,6 @@ Types.prototype = {
         tan : new Definition("?Number:val"),
         $$proto : new Definition("Object")
     },
-
 
     /**
      * See 15.9.5 Properties of the Date Prototype Object
