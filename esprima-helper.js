@@ -1,8 +1,7 @@
-fs = require('fs');
-path = require('path');
-helper = require('./helper.js');
-
-EsprimaJavaScriptContentAssistProvider = require('./esprima/esprimaJsContentAssist.js').EsprimaJavaScriptContentAssistProvider;
+var fs = require('fs');
+var path = require('path');
+var helper = require('./helper.js');
+var EsprimaJavaScriptContentAssistProvider = require('./esprima/esprimaJsContentAssist.js').EsprimaJavaScriptContentAssistProvider;
 
 
 // recorded file summaries,

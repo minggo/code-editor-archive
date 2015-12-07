@@ -75,7 +75,9 @@ Global.prototype = {
     decodeURIComponent : new Definition("?String:encodedURIString"),
     encodeURIComponent : new Definition("?String:decodedURIString"),
 
-    // "cc": new Definition("cc"),
+    "cc": new Definition("cc"),
+    "AssetDB": new Definition("AssetDB"),
+    "Editor" : new Definition("Editor"),
 
     // not included since not meant to be referenced directly
     // EvalError, RangeError, ReferenceError, SyntaxError, TypeError, URIError
@@ -361,7 +363,7 @@ Types.prototype = {
 
     // cc: {
     // 	$$isBuiltin: true,
-    // 	Sprite: new Definition("ccSprite"),
+    // 	Sprite: new Definition("?ccSprite:x,y"),
     // 	$$proto : new Definition("Object"),
     // },
 

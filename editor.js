@@ -1,5 +1,8 @@
-path = require('path');
-fs = require('fs');
+var path = require('path');
+var fs = require('fs');
+
+// add our own builtins
+require('./firedoc-helper.js').genrateBuiltin();
 
 var langTools = ace.require('ace/ext/language_tools');
 var editor = ace.edit('editor');
