@@ -48,6 +48,10 @@ var myCompleter = {
     callback(null, completions);
   },
 
+  getDocTooltip: function(selected) {
+    return selected.description;
+  },
+
   // add this line to make foo. can trigger the pop-up window
   identifierRegexps: [ /[a-zA-Z_0-9\$\-\u00A2-\uFFFF.]/ ]
 };

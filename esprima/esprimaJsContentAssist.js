@@ -1934,7 +1934,8 @@ function createInferredProposals(targetTypeName, env, completionKind, prefix, re
                     // we have a function
                     res = calculateFunctionProposal(propName,
                             propType, replaceStart - 1);
-                    var funcDesc = res.completion + " : " + mTypes.createReadableType(propType, env);
+                    // minggo added: get more readable descript if it exists
+                    var funcDesc = type[propName].description || res.completion + " : " + mTypes.createReadableType(propType, env);
                     proposals["$"+propName] = {
                         proposal: removePrefix(prefix, res.completion),
                         description: funcDesc,

@@ -37,10 +37,11 @@ var doctrine = require('./doctrine.js');
  * @param {Array.<Number>} range
  * @param String path
  */
-var Definition = function(typeName, range, path) {
+var Definition = function(typeName, range, path, description) {
     this.typeName = typeName;
     this.range = range;
     this.path = path;
+    this.description = description;
 };
 
 // From ecma script manual 262 section 15

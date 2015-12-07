@@ -74,7 +74,7 @@ function generateMember(property) {
   }
 
   var ret = {};
-  ret[name] = new Definition(description);
+  ret[name] = new Definition(description, property.description);
   return ret;
 }
 
@@ -117,7 +117,7 @@ function generateClass(clazz) {
       };
 
       var moduleMeta = {};
-      moduleMeta[clazz.name] = new Definition(description);
+      moduleMeta[clazz.name] = new Definition(description, clazz.description);
       ret.moduleMeta = moduleMeta;
       
       return ret;
@@ -235,10 +235,11 @@ function generateModules(ast) {
 }
 
 // copy from 'esprima/types.js'
-var Definition = function(typeName, range, path) {
+var Definition = function(typeName, description, range, path) {
     this.typeName = typeName;
     this.range = range;
     this.path = path;
+    this.description = description;
 };
 
 var enginePath = path.join(__dirname, 'api/engine');
