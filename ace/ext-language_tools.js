@@ -1502,6 +1502,16 @@ var Autocomplete = function() {
         if (keepPopupPosition && this.base && this.completions) {
             var pos = this.editor.getCursorPosition();
             var prefix = this.editor.session.getTextRange({start: this.base, end: pos});
+
+            //minggo added: handle the situation when '.' is input
+            if (prefix[prefix.length-1] === '.') {
+                this.detach();
+                this.editor.completer = new Autocomplete();
+                this.editor.autoInsert = false;
+                this.editor.completer.showPopup(editor);
+                return;
+            }
+
             if (prefix == this.completions.filterText)
                 return;
             this.completions.setFilter(prefix);
