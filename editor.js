@@ -2,10 +2,11 @@ var path = require('path');
 var fs = require('fs');
 
 // add our own builtins
-require('./firedoc-helper.js').genrateBuiltin();
+require('./firedoc-helper.js').generateBuiltin();
 
 var langTools = ace.require('ace/ext/language_tools');
-var editor = ace.edit('editor');
+var helper = require('./helper.js');
+
 var UNKNOWN_FILE_NAME = path.join(__dirname, 'unknown.js');
 var currentEdittingFile = UNKNOWN_FILE_NAME;
 // whether current editting file content is changed
@@ -28,9 +29,9 @@ var myCompleter = {
     // if the pop up window is triggered by `.`, such as foo., then should disable other keyWordCompleters,
     // because we know it wants to access attributes now
     if (prefix === '')
-      disableSystemCompleters();
+      helper.disableSystemCompleters();
     else
-      enableSystemCompleters();
+      helper.enableSystemCompleters();
 
     var completions = [];
     var proposals = computeCompletions(editor, session, pos, prefix);
@@ -38,10 +39,7 @@ var myCompleter = {
       var proposal = proposals[i];
       completions.push({
         value: prefix + proposal.proposal,
-        // this section can be ued to show helper message
-        // snippet: proposal.description,
         description: proposal.description,
-        // type: "snippet"
       });
     }
 
@@ -56,53 +54,6 @@ var myCompleter = {
   identifierRegexps: [ /[a-zA-Z_0-9\$\-\u00A2-\uFFFF.]/ ]
 };
 
-function disableCompleter(completer) {
-  for (var i in editor.completers) {
-    var value = editor.completers[i];
-    if (value === completer) {
-      editor.completers.splice(i, 1);
-      return;
-    }
-   }
-}
-
-function enableCompleter(completer) {
-  for (var i in editor.completers) {
-    var value = editor.completers[i];
-    if (value === completer)
-        return;
-  }
-  editor.completers.push(completer); 
-}
-
-function enalbeKeyWordCompleter() {
-  enableCompleter(langTools.keyWordCompleter);
-}
-
-function disableKeyWordCompleter() {
-   disableCompleter(langTools.keyWordCompleter);
-}
-
-function disableSnippetCompleter() {
-  disableCompleter(langTools.snippetCompleter);
-}
-
-function enableSnippetCompleter() {
-  enableCompleter(langTools.sinppetCompleter);
-}
-
-// enable keyWordCompleter and snippetCompleter
-function enableSystemCompleters() {
-  enableCompleter(langTools.keyWordCompleter);
-  enableCompleter(langTools.snippetCompleter);
-}
-
-// disable keyWordCompleter and sinppetCompleter
-function disableSystemCompleters() {
-  disableCompleter(langTools.keyWordCompleter);
-  disableCompleter(langTools.snippetCompleter);
-}
-
 // get a file path that is currently editted
 function getEdittingFilePath() {
   return currentEdittingFile;
@@ -112,6 +63,8 @@ function setEdittingFilePath(filePath) {
   currentEdittingFile = filePath;
 }
 
+// create and initialize ace editor
+var editor = helper.editor;
 editor.setOptions({
   enableLiveAutocompletion: true,
   enableSnippets: true,

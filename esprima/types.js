@@ -24,6 +24,7 @@ It also contains functions for manipulating internal type signatures.
 var proposalUtils = require('./proposalUtils.js');
 var doctrine = require('./doctrine.js');
 
+// minggo: add 'description' parameter
 /**
  * The Definition class refers to the declaration of an identifier.
  * The start and end are locations in the source code.
@@ -36,6 +37,7 @@ var doctrine = require('./doctrine.js');
  * @param String typeName
  * @param {Array.<Number>} range
  * @param String path
+ * @param description description of typename, it is used for tooltips
  */
 var Definition = function(typeName, range, path, description) {
     this.typeName = typeName;
@@ -76,6 +78,7 @@ Global.prototype = {
     decodeURIComponent : new Definition("?String:encodedURIString"),
     encodeURIComponent : new Definition("?String:decodedURIString"),
 
+    // minggo: add fireball modules
     "cc": new Definition("cc"),
     "AssetDB": new Definition("AssetDB"),
     "Editor" : new Definition("Editor"),
@@ -129,6 +132,12 @@ Module.prototype = {
     querystring: new Definition("String"),
     __filename: new Definition("String"),
     __dirname: new Definition("String")
+
+    // minggo: add fireball modules
+    "cc": new Definition("cc"),
+    "AssetDB": new Definition("AssetDB"),
+    "Editor" : new Definition("Editor"),
+
 };
 
 var Window = function() {};
@@ -297,6 +306,12 @@ Window.prototype = {
     WebSocket : new Definition("*WebSocket:url,protocols"),
     Event : new Definition("*Event:type"),
     Node : new Definition("*Node:")
+
+    // minggo: add fireball modules
+    "cc": new Definition("cc"),
+    "AssetDB": new Definition("AssetDB"),
+    "Editor" : new Definition("Editor"),
+
 };
 
 var initialGlobalProperties = [];
@@ -361,30 +376,6 @@ Types.prototype = {
         $_$isPrototypeOf: new Definition("?Boolean:object"),
         $_$propertyIsEnumerable: new Definition("?Boolean:property")
     },
-
-    // cc: {
-    // 	$$isBuiltin: true,
-    // 	Sprite: new Definition("?ccSprite:x,y"),
-    // 	$$proto : new Definition("Object"),
-    // },
-
-    // ccPosition: {
-    // 	$$isBuiltin: true,
-    // 	x: new Definition("Number"),
-    // 	y: new Definition("Number"),
-    // 	$$proto: new Definition("Object"),
-    // },
-
-    // ccNode: {
-    // 	$$isBuiltin: true,
-    // 	setPosition: new Definition("?undefined:x,y"),
-    //     $$proto : new Definition("Object"),
-    // },
-
-    // ccSprite: {
-    // 	$$isBuiltin: true,
-    // 	$$proto : new Definition("ccNode"),
-    // },
 
     /**
      * See 15.3.4 Properties of the Function Prototype Object
