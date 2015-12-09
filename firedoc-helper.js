@@ -168,70 +168,70 @@ function generateModules(ast) {
                                 $$proto: new Definition('Object') };
   }
 
-// get class info
-for (var className in ast.classes) {
-  var c = ast.classes[className];
-  var moduleName = c.module;
-  if (!moduleName)
-    continue;
-  
-  var classInfo = generateClass(c);
-  if (!classInfo)
-    continue;
+  // get class info
+  for (var className in ast.classes) {
+    var c = ast.classes[className];
+    var moduleName = c.module;
+    if (!moduleName)
+      continue;
+    
+    var classInfo = generateClass(c);
+    if (!classInfo)
+      continue;
 
-  if (!modulesInfo[moduleName]) {
-    console.log('!!!module of class: ' + className + ' is not a valid value: ' + moduleName);
-    continue;
-  }
-  modulesInfo[moduleName].classes[className] = classInfo.classMeta;
-  mergeObject(modulesInfo[moduleName], classInfo.moduleMeta);
-}
-
-// get class property info
-for (var i in ast.members) {
-  var member = ast.members[i];
-  if (member.name === '') {
-    printDashes();
-    console.log('!!!Do not have name');
-    console.log(member)
-    continue;
-    printDashes();
-  }
-      
-
-  var moduleName= member.module;
-  if (!modulesInfo[moduleName]) {
-    printDashes();
-    console.log('!!!module of ' + member.name + ' is not a valid value: ' + moduleName);
-    console.log(member.file);
-    printDashes();
-    continue;
+    if (!modulesInfo[moduleName]) {
+      console.log('!!!module of class: ' + className + ' is not a valid value: ' + moduleName);
+      continue;
+    }
+    modulesInfo[moduleName].classes[className] = classInfo.classMeta;
+    mergeObject(modulesInfo[moduleName], classInfo.moduleMeta);
   }
 
-  var memberInfo = generateMember(member);
-  var isModuleFunction = (member.clazz === '');
-  if (isModuleFunction) {
-    // it is a module member
-    mergeObject(modulesInfo[moduleName], memberInfo);
-  }
-  else {
-    // it is a class member
-    var className = member.clazz;
-    if (!modulesInfo[moduleName].classes[member.clazz]) {
+  // get class property info
+  for (var i in ast.members) {
+    var member = ast.members[i];
+    if (member.name === '') {
       printDashes();
-      console.log('!!!class of ' + member.name + ' is not a valid value: ' + className);
+      console.log('!!!Do not have name');
+      console.log(member)
+      continue;
+      printDashes();
+    }
+        
+
+    var moduleName= member.module;
+    if (!modulesInfo[moduleName]) {
+      printDashes();
+      console.log('!!!module of ' + member.name + ' is not a valid value: ' + moduleName);
       console.log(member.file);
       printDashes();
       continue;
     }
-    var classInfo = modulesInfo[moduleName].classes[className];
-    var transformedClassName = transforType(moduleName, className);
-    mergeObject(classInfo[transformedClassName], memberInfo);
-  }
-}
 
-formatModuleInfos(modulesInfo);
-return modulesInfo;
+    var memberInfo = generateMember(member);
+    var isModuleFunction = (member.clazz === '');
+    if (isModuleFunction) {
+      // it is a module member
+      mergeObject(modulesInfo[moduleName], memberInfo);
+    }
+    else {
+      // it is a class member
+      var className = member.clazz;
+      if (!modulesInfo[moduleName].classes[member.clazz]) {
+        printDashes();
+        console.log('!!!class of ' + member.name + ' is not a valid value: ' + className);
+        console.log(member.file);
+        printDashes();
+        continue;
+      }
+      var classInfo = modulesInfo[moduleName].classes[className];
+      var transformedClassName = transforType(moduleName, className);
+      mergeObject(classInfo[transformedClassName], memberInfo);
+    }
+  }
+
+  formatModuleInfos(modulesInfo);
+  return modulesInfo;
 }
 
 // copy from 'esprima/types.js'
